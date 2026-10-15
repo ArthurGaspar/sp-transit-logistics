@@ -1,0 +1,78 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 06:00 in São Paulo: fresh GTFS feed and retrained speed model
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Test pipeline
+        run: python -m pytest pipeline/tests -q
+
+      - name: Fetch collected realtime aggregates (if any)
+        run: |
+          if git ls-remote --exit-code --heads origin realtime-data > /dev/null; then
+            git fetch --depth=1 origin realtime-data
+            git archive FETCH_HEAD realtime | tar -x -C pipeline
+            ls -la pipeline/realtime
+          else
+            echo "No realtime-data branch yet; the speed model will wait for data."
+          fi
+
+      - name: Build data
+        run: python pipeline/build.py --refresh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install, test and build web app
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: web/dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
