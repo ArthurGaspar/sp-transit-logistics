@@ -2,7 +2,7 @@ name: Build and deploy
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
   schedule:
     - cron: "0 9 * * 1" # Mondays 06:00 in São Paulo: fresh GTFS feed and retrained speed model

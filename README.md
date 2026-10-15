@@ -90,7 +90,7 @@ Tests: `python -m pytest pipeline/tests` and `cd web && npm test`.
 
 1. Push to a **public** GitHub repository named `sp-transit-logistics`.
 2. Under **Settings → Pages**, set **Source** to **GitHub Actions**.
-3. The `Build and deploy` workflow runs on every push to `main` and every Monday with a fresh GTFS feed.
+3. The `Build and deploy` workflow runs on every push to `master` and every Monday with a fresh GTFS feed.
 
 ## Enable the live speed model
 
