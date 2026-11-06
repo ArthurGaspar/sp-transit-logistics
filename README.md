@@ -1,115 +1,119 @@
 # SP Transit Logistics
 
-São Paulo bus-network analysis and a delivery route optimizer, served as a static site.
+An independent project by [Arthur Gaspar](https://github.com/ArthurGaspar): a São Paulo transit atlas and a delivery route planner that runs in the browser.
 
-**Live demo:** https://arthurgaspar.github.io/sp-transit-logistics/
+[Open the project](https://arthurgaspar.github.io/sp-transit-logistics/) · [Engineering decisions](#engineering-decisions) · [Routing benchmark](docs/benchmark.md)
 
-![Transit access map of São Paulo](docs/insights.png)
+![Project introduction](docs/overview.png)
 
-Three views, built on open data:
+## Why this project
 
-- **Transit insights.** Every São Paulo hexagon (H3 resolution 8, ~0.74 km²) scored by scheduled bus frequency and walking distance to a stop. There's a focus mode for the São Paulo side of the **Grande ABC** border and a ranked list of its worst-served areas. Click a hexagon to see and draw the bus routes serving it.
-- **Route optimizer.** Upload a CSV of delivery points (or use a demo scenario) and get a capacitated vehicle-routing plan: fleet size, km, hours and cost per van, compared with a nearest-neighbor dispatch baseline. It's solved in a Web Worker in milliseconds, and files never leave the browser.
-- **Model & data.** A documented analysis of what the official timetable can and can't tell you about traffic, plus the live-GPS speed model card.
+I’m a full-stack developer based in São Caetano do Sul. At Shippify I worked on logistics dashboards and routing systems; at UFABC I worked on Python data pipelines and scientific dashboards. This project brings those areas together around São Paulo and the Grande ABC, using public data and synthetic delivery scenarios. It is independent of my employers and uses no client data.
 
-![Route optimizer](docs/optimizer.png)
+Two tools answer different questions:
 
-## Key findings
+- **Transit atlas:** inspect scheduled peak-hour service, straight-line distance to stops, and the bus routes serving each area. A border filter focuses on the São Paulo side of the ABC.
+- **Delivery planner:** select a demo or import delivery points, set capacity and shift constraints, compare with nearest-neighbor dispatch, and export a route sequence. Input files stay in the browser.
 
-| Question | Result |
+The **Model & data** view explains the measurements, validation, and limitations. The project overview connects the working tools to the engineering choices behind them.
+
+![Transit atlas](docs/insights.png)
+
+## Engineering decisions
+
+| Decision | Reason and tradeoff |
 |---|---|
-| Bus stops / routes analyzed | 22,274 stops, 1,349 bus routes + 16 metro/rail lines |
-| São Paulo hexagons with low transit access* | 21% (plus 17% classed as remote / likely uninhabited) |
-| Low access within 3 km of the ABC border | 18% of 305 hexagons |
-| Route optimizer vs nearest-neighbor dispatch | **11-29% fewer km** on the demo scenarios, same fleet size |
-| Can the GTFS timetable predict where buses are slow? | **No.** Location features give a cross-validated R² of −0.10 |
+| Python pipeline → static JSON | Network analysis and model training happen at build time. Pages can serve the result without an application server, at the cost of snapshot rather than live data. |
+| React + TypeScript | Shared data and worker contracts make the pipeline outputs and solver messages explicit. Data-load failures have a retry path. |
+| Solver in a Web Worker | Local search leaves the interface responsive. Request IDs prevent an old job from replacing results after the inputs change. |
+| Lazy-loaded workspaces | The introduction does not load the mapping engine or routing worker. Route shapes are requested only after an area is selected. |
+| Explicit comparison baseline | Nearest-neighbor dispatch is also a solver starting point. Tests check feasibility and that the driving-time objective does not regress against that baseline. |
+| GitHub Actions + Pages | Tests and builds run before deployment; scheduled jobs refresh the feed and collect optional GPS aggregates. Reproduction needs no paid service. |
 
-\*Under 60 scheduled buses/hour within ~1 km at the 7-8 am peak, or over 500 m to a stop.
-
-### Why the speed model uses GPS instead of the timetable
-
-The SPTrans timetable can't tell where buses run slowly. Stop-to-stop times don't correlate with stop-to-stop distance (median r = −0.07), so they are interpolated rather than measured, and trip speed doesn't correlate with distance from the center (r = 0.002). The pipeline recomputes these checks on every build. The speed model trains on GPS positions from the SPTrans Olho Vivo API instead, collected by a scheduled GitHub Action. See [Enable the live speed model](#enable-the-live-speed-model).
-
-## Architecture
+The frontend is a static application, not a demonstration of backend API or database design. The full-stack work here is the data-to-interface workflow, background computation, typed integration, and automated delivery.
 
 ```mermaid
 flowchart LR
-    subgraph Sources["Open data"]
-        GTFS["SPTrans GTFS<br/>via Mobility Database"]
-        IBGE["IBGE municipal<br/>boundaries"]
-        OV["Olho Vivo live<br/>bus positions"]
-    end
-    subgraph Actions["GitHub Actions (free for public repos)"]
-        COL["collect-realtime.yml<br/>every 30 min"]
-        BUILD["deploy.yml<br/>on push + weekly"]
-    end
-    OV --> COL -->|hourly aggregates| BR[("realtime-data<br/>branch")]
-    GTFS --> BUILD
-    IBGE --> BUILD
-    BR --> BUILD
-    BUILD -->|"Python: metrics, analysis,<br/>random forest → static JSON"| SITE["GitHub Pages<br/>React + MapLibre<br/>VRP solver in a Web Worker"]
+    GTFS[SPTrans GTFS] --> PY[Python pipeline]
+    IBGE[IBGE boundaries] --> PY
+    GPS[Optional Olho Vivo collection] --> AGG[Hourly aggregates]
+    AGG --> PY
+    PY --> JSON[Static JSON on GitHub Pages]
+    JSON --> UI[React / TypeScript]
+    UI --> MAP[MapLibre atlas]
+    UI <--> WORKER[Routing Web Worker]
 ```
 
-No servers, databases or paid APIs. The Python pipeline precomputes everything into static JSON (~450 KB gzipped, with route shapes loaded only when needed), and the browser does the interactive work. The whole site transfers ~1.1 MB gzipped.
+## What the measurements mean
 
-| Layer | Stack |
-|---|---|
-| Data pipeline | Python, pandas, H3, Shapely, scikit-learn, SciPy, pytest |
-| Web app | React 19, TypeScript, Vite, MapLibre GL, h3-js, Vitest |
-| Basemap | OpenStreetMap data, OpenFreeMap tiles (free, no key) |
-| CI/CD | GitHub Actions → GitHub Pages |
+The atlas assigns SPTrans stops and trips to H3 resolution 8 cells, then counts distinct scheduled trip departures in each cell and its six neighbors during the 07:00–08:00 weekday peak. A haversine BallTree finds the nearest stop. Rules in `pipeline/network.py` classify access from frequency, distance, and nearby rail.
 
-## How it works
+The headline percentages use **all São Paulo cells**, including cells separately classified as remote. These are area-based measures, not estimates of the number of residents with poor access. Remote cells are excluded from the border gap ranking; their population is unknown.
 
-**Access metrics** (`pipeline/network.py`). Each stop is assigned to an H3 cell. For every cell, the pipeline sums the peak-hour departures (`frequencies.txt`) of all distinct trips stopping in the cell or its six neighbors, counts routes, and finds the nearest stop with a haversine BallTree. Thresholds sit near the 20th percentile and the median of urban hexagons. Without population data, hexagons more than 1.5 km from any stop are treated as remote (reservoirs, Atlantic forest) and kept out of gap rankings.
+The supplied feed is not a complete picture of ABC municipal and intermunicipal transit. ABC cells remain unscored. A distance to a stop is a straight line, not a walk along streets.
 
-**Route optimizer** (`web/src/lib/vrp.ts`). Capacitated VRP with a shift-length limit and per-stop service time. It builds candidate plans with Clarke-Wright savings (four route-shape λ values) and a nearest-neighbor plan, improves each with 2-opt, relocate and swap local search, and keeps the best. Since the nearest-neighbor plan is one of the starts, the result is never worse than the baseline; a unit test enforces this. Travel time = straight-line km × detour factor ÷ speed, where speed is either a constant or the live model's prediction for each area and hour.
+### Routing
 
-**Live speed model** (`pipeline/collect_realtime.py`, `pipeline/speed_model.py`). Two snapshots of every bus position, 75 s apart, become per-vehicle speeds, aggregated per hexagon and hour. Only aggregates are stored. A random forest learns speed from hour (cyclical encoding), weekday/weekend, location and network density. It's validated with spatial GroupKFold over ~36 km² blocks against a strong baseline (the city-wide mean speed for that hour). ABC hexagons, which have no SPTrans GPS, take the mean of their nearest São Paulo neighbors.
+The capacitated vehicle-routing solver uses Clarke–Wright savings with four route-shape parameters, plus a nearest-neighbor start. Each candidate is improved with 2-opt, relocate, and swap moves. The objective is **driving minutes**, not minimum fleet size or minimum monetary cost. Capacity and shift length, including service time, are constraints. Unservable stops are listed explicitly.
+
+Distances use straight-line kilometers multiplied by an editable detour factor. Travel times use either a constant speed or a spatial bus-speed estimate, sampled at each leg’s endpoints and midpoint. There is no road-network routing, turn restriction model, or delivery time window. A shorter estimated route is not evidence of realized operational savings.
+
+Run `npm run benchmark` in `web` after building the data. The [recorded benchmark](docs/benchmark.md) includes the assumptions, baseline, results, and validation checks.
+
+![Delivery planner](docs/optimizer.png)
+
+### Scheduled speed versus observed speed
+
+The pipeline tests location and route-design features against scheduled trip speeds using grouped cross-validation. In the checked-in benchmark snapshot, location-only R² is −0.104 and the combined feature set scores 0.143. These tests describe scheduled speeds; they do not measure traffic and do not establish how the timetable’s stop times were generated.
+
+A separate random forest can train on paired Olho Vivo vehicle positions. It is evaluated with spatial GroupKFold against the mean speed for each hour. Bus speed remains an experimental proxy for delivery-van speed, even after scaling. The UI reports whether the model has enough data and keeps that option disabled until it does.
 
 ## Run locally
 
-Needs Python 3.11+ and Node 22+.
+Requires Python 3.11+ and Node 22+.
 
-```bash
-# 1. Build the data (~15 s; downloads ~14 MB of GTFS once)
+```sh
 python -m venv pipeline/.venv
-pipeline/.venv/Scripts/activate        # Windows; use `source pipeline/.venv/bin/activate` on macOS/Linux
+# Windows PowerShell:
+pipeline/.venv/Scripts/Activate.ps1
+# macOS / Linux: source pipeline/.venv/bin/activate
 pip install -r pipeline/requirements.txt
-python pipeline/build.py               # add --refresh to re-download the feed
+python pipeline/build.py
 
-# 2. Run the app
 cd web
-npm install
+npm ci
 npm run dev
 ```
 
-Tests: `python -m pytest pipeline/tests` and `cd web && npm test`.
+The data build downloads the GTFS feed once, then uses its local cache. Use `python pipeline/build.py --refresh` to fetch again. Generated JSON and downloaded inputs are ignored by Git.
 
-## Deploy
+```sh
+# From the repository root:
+python -m pytest pipeline/tests -q
 
-1. Push to a **public** GitHub repository named `sp-transit-logistics`.
-2. Under **Settings → Pages**, set **Source** to **GitHub Actions**.
-3. The `Build and deploy` workflow runs on every push to `master` and every Monday with a fresh GTFS feed.
+# From web/:
+npm test
+npm run benchmark
+npm run build
+```
 
-## Enable the live speed model
+The web tests cover routing feasibility, baseline comparison, spatial travel estimates, and CSV import. The solver regression suite includes a non-metric travel-time case where removing a stop could otherwise leave a route over its shift limit.
 
-1. Create a free developer account at <https://www.sptrans.com.br/desenvolvedores/> and create an application to get a token.
-2. In the repository, open **Settings → Secrets and variables → Actions** and add a secret named `OLHOVIVO_TOKEN`.
-3. The `Collect live bus speeds` workflow then runs every 30 minutes and commits hourly aggregates to the `realtime-data` branch. After at least 3 days of data, the next deploy trains the model, and the **Bus speed** map layer and **Bus-GPS model** optimizer mode switch on.
+## Deployment and optional GPS collection
 
-GitHub may pause scheduled workflows in repositories with no activity for 60 days; re-enable it from the Actions tab if that happens.
+The existing GitHub Pages workflow deploys pushes to `master` and rebuilds weekly. In the repository’s **Settings → Pages**, select **GitHub Actions** as the source. Pull requests run the build without publishing.
 
-## Limitations and next steps
+For GPS collection, obtain an [SPTrans developer token](https://www.sptrans.com.br/desenvolvedores/) and set the repository Actions secret `OLHOVIVO_TOKEN`. The collection workflow stores only hourly per-cell aggregates on the `realtime-data` branch. The next site build trains the model once the configured data threshold is met. Scheduled workflow availability and API access determine whether new observations arrive.
 
-- **ABC coverage.** The ABC municipalities and EMTU publish no open GTFS, so access is scored on the São Paulo side only.
-- **Population.** Adding IBGE census population per hexagon would turn "low access" into "people with low access".
-- **Road distances.** Routes use straight-line distance × detour factor. A precomputed OSM road graph could give real road distances while staying static.
-- **Optimizer features.** Time windows, multiple depots and a fixed cost per van are natural extensions.
+## Where I would take it next
 
-## Data sources and licenses
+1. **A road-network distance matrix.** This would address the planner’s largest approximation before adding more optimization heuristics.
+2. **Population-weighted access.** IBGE census counts would distinguish poorly served land from poorly served residents and let the remote class be revisited.
+3. **Delivery time windows.** These would make the planner closer to dispatch constraints; they require a new feasibility model and benchmark cases.
 
-- SPTrans GTFS, mirrored by [Mobility Database](https://mobilitydatabase.org) (feed `mdb-8`)
-- [IBGE](https://servicodados.ibge.gov.br/api/docs/malhas) municipal boundaries, vendored in `pipeline/data/boundaries` because the IBGE server omits its intermediate TLS certificate
-- SPTrans Olho Vivo API
-- © OpenStreetMap contributors; tiles by [OpenFreeMap](https://openfreemap.org)
+## Sources
+
+- SPTrans GTFS, mirrored by [Mobility Database](https://mobilitydatabase.org), feed `mdb-8`.
+- [IBGE municipal boundaries](https://servicodados.ibge.gov.br/api/docs/malhas), vendored under `pipeline/data/boundaries`.
+- SPTrans Olho Vivo API for optional GPS observations.
+- © OpenStreetMap contributors; basemap tiles by [OpenFreeMap](https://openfreemap.org).

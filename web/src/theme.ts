@@ -14,7 +14,6 @@ function readChoice(): ThemeChoice {
   return "system";
 }
 
-/** Returns whether the effective theme is dark, plus a toggle that cycles system → light → dark. */
 export function useTheme(): { dark: boolean; choice: ThemeChoice; cycle: () => void } {
   const [choice, setChoice] = useState<ThemeChoice>(readChoice);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia(DARK_QUERY).matches);

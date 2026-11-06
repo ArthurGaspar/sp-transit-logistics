@@ -1,19 +1,11 @@
-/**
- * Capacitated vehicle routing with a shift-length limit, solved in the browser.
- *
- * 1. Clarke-Wright savings builds an initial set of routes.
- * 2. Local search improves it until no move helps: 2-opt inside each route,
- *    then relocating or swapping stops between routes.
- *
- * Index 0 of the matrices is the depot; stop i of the input is index i + 1.
- * The objective is total driving minutes, so a speed field that varies by area
- * changes the plan, not just its reported duration.
+/** Capacitated VRP with a shift limit. Matrices use depot index 0, then stops 1..n.
+ * Travel times must be symmetric; the objective is total driving minutes.
  */
 
 export interface VrpProblem {
   /** Driving minutes between every pair of locations, depot first. */
   minutes: number[][];
-  /** Road kilometers between every pair of locations, depot first. */
+  /** Estimated kilometers between every pair of locations, depot first. */
   km: number[][];
   /** Demand of each stop (length n, without the depot). */
   demand: number[];
@@ -92,11 +84,7 @@ function servable(p: VrpProblem): { ok: number[]; unassigned: number[] } {
   return { ok, unassigned: unassigned.map((i) => i - 1) };
 }
 
-/**
- * Baseline for comparison, close to what a dispatcher would do by hand: from the
- * current position, always drive to the nearest unvisited stop that still fits
- * in the van and the shift; when none fits, return to the depot and start a new van.
- */
+/** Greedy dispatch: visit the nearest remaining stop that fits capacity and shift. */
 export function nearestNeighborPlan(p: VrpProblem): VrpSolution {
   const { ok, unassigned } = servable(p);
   const left = new Set(ok);
@@ -195,6 +183,8 @@ function relocate(p: VrpProblem, routes: Seq[]): boolean {
     for (let k = 0; k < routes[a].length; k++) {
       const s = routes[a][k];
       const without = [...routes[a].slice(0, k), ...routes[a].slice(k + 1)];
+      // Spatial speed estimates need not obey the triangle inequality.
+      if (!feasible(p, without)) continue;
       const removed = driveMinutes(p, routes[a]) - driveMinutes(p, without);
       for (let b = 0; b < routes.length; b++) {
         if (b === a) continue;
@@ -245,11 +235,8 @@ function localSearch(p: VrpProblem, routes: Seq[], deadline: number): Seq[] {
 
 const SAVINGS_LAMBDAS = [1, 0.7, 1.3, 1.6];
 
-/**
- * Multi-start: local search from Clarke-Wright with several lambdas and from the
- * nearest-neighbor plan, keeping the plan with the fewest driving minutes.
- * Starting from nearest-neighbor guarantees the result is never worse than it.
- * Each start gets an equal share of `budgetMs`.
+/** Improve savings and nearest-neighbor starts, sharing the time budget equally.
+ * Including the baseline guarantees a non-regressing driving-time objective.
  */
 export function solve(p: VrpProblem, budgetMs = 2000): VrpSolution {
   const { ok, unassigned } = servable(p);

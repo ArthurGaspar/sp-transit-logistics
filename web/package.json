@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "benchmark": "node scripts/benchmark.mjs"
   },
   "dependencies": {
     "h3-js": "^4.5.0",

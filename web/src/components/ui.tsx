@@ -1,4 +1,12 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+
+export function DataState({ error = false }: { error?: boolean }) {
+  return <div className="load-state" role={error ? "alert" : "status"}>
+    <h1>{error ? "The project data couldn’t be loaded." : "Loading the São Paulo dataset…"}</h1>
+    <p>{error ? "Check your connection and try again. If this continues, the published dataset may be unavailable." : "Preparing the network and delivery scenarios."}</p>
+    {error && <button className="secondary" onClick={() => window.location.reload()}>Try again</button>}
+  </div>;
+}
 
 export function Tile({ value, label, delta }: { value: ReactNode; label: string; delta?: ReactNode }) {
   return (
@@ -55,12 +63,13 @@ export function Slider({
   format?: (v: number) => string;
   onChange: (v: number) => void;
 }) {
+  const id = useId();
   return (
     <div className="field">
-      <label>
+      <label htmlFor={id}>
         {label} <output>{format(value)}</output>
       </label>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
     </div>
   );
 }
@@ -78,10 +87,12 @@ export function NumberField({
   step?: number;
   onChange: (v: number) => void;
 }) {
+  const id = useId();
   return (
     <div className="field">
-      <label>{label}</label>
+      <label htmlFor={id}>{label}</label>
       <input
+        id={id}
         type="number"
         value={value}
         min={min}
@@ -100,5 +111,5 @@ export const fmt = {
   dec: (v: number, d = 1) => v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }),
   pct: (v: number) => `${(v * 100).toFixed(0)}%`,
   brl: (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`,
-  hours: (min: number) => `${Math.floor(min / 60)}h${String(Math.round(min % 60)).padStart(2, "0")}`,
+  hours: (min: number) => `${Math.floor(Math.round(min) / 60)}h${String(Math.round(min) % 60).padStart(2, "0")}`,
 };

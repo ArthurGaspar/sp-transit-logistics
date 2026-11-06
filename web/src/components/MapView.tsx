@@ -1,12 +1,11 @@
 import * as maplibregl from "maplibre-gl";
 import type { Map as MlMap } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // MapLibre 6 ships its worker as a separate module; let Vite emit it and point MapLibre at it.
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
-// OpenFreeMap: free vector tiles, no API key, no usage fees.
 const STYLES = {
   light: "https://tiles.openfreemap.org/styles/positron",
   dark: "https://tiles.openfreemap.org/styles/dark",
@@ -22,12 +21,14 @@ interface Props {
 
 /** A MapLibre map that is rebuilt (keeping the camera) when the theme changes. */
 export function MapView({ dark, onReady }: Props) {
+  const [basemapUnavailable, setBasemapUnavailable] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const camera = useRef<{ center: [number, number]; zoom: number }>(SAO_PAULO_VIEW);
   const ready = useRef(onReady);
   ready.current = onReady;
 
   useEffect(() => {
+    setBasemapUnavailable(false);
     const map = new maplibregl.Map({
       container: container.current!,
       style: dark ? STYLES.dark : STYLES.light,
@@ -36,6 +37,14 @@ export function MapView({ dark, onReady }: Props) {
       attributionControl: { compact: true },
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.on("error", () => {
+      setBasemapUnavailable(true);
+      if (!map.getStyle()) {
+        map.setStyle({ version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": dark ? "#242422" : "#eae7de" } }] });
+      }
+    });
+    const resize = new ResizeObserver(() => map.resize());
+    resize.observe(container.current!);
     map.on("moveend", () => {
       const c = map.getCenter();
       camera.current = { center: [c.lng, c.lat], zoom: map.getZoom() };
@@ -43,11 +52,15 @@ export function MapView({ dark, onReady }: Props) {
     map.on("load", () => ready.current(map));
     return () => {
       ready.current(null);
+      resize.disconnect();
       map.remove();
     };
   }, [dark]);
 
-  return <div ref={container} />;
+  return <>
+    <div className="map-canvas" ref={container} />
+    {basemapUnavailable && <p className="map-notice" role="status">Some background map details couldn’t be loaded. Project overlays can still be explored.</p>}
+  </>;
 }
 
 /** Adds or replaces a GeoJSON source's data. */

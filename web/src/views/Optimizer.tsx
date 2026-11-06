@@ -1,7 +1,7 @@
 import type { Map as MlMap, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapView, setGeoJson } from "../components/MapView";
-import { NumberField, Segmented, Slider, Tile, fmt } from "../components/ui";
+import { DataState, NumberField, Segmented, Slider, Tile, fmt } from "../components/ui";
 import { load, type Cells, type Meta, type Scenario, type ScenarioPoint } from "../data";
 import { routeStyle } from "../lib/colors";
 import { parseDeliveryCsv } from "../lib/csv";
@@ -47,45 +47,67 @@ export function Optimizer({ dark }: { dark: boolean }) {
   });
   const [result, setResult] = useState<SolveResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dataError, setDataError] = useState(false);
+  const [solverError, setSolverError] = useState(false);
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const [map, setMap] = useState<MlMap | null>(null);
   const worker = useRef<Worker | null>(null);
+  const revision = useRef(0);
 
   useEffect(() => {
     Promise.all([load<Meta>("meta.json"), load<Scenario[]>("scenarios.json"), load<Cells>("cells.json")]).then(([m, s, c]) => {
       setMeta(m);
       setScenarios(s);
       setCells(c);
+      if (!s.length) throw new Error("No delivery scenarios available");
       applyScenario(s[0]);
-    });
+    }).catch(() => setDataError(true));
     worker.current = new Worker(new URL("../lib/solver.worker.ts", import.meta.url), { type: "module" });
     worker.current.onmessage = (e: MessageEvent<SolveResponse>) => {
+      if (e.data.requestId !== revision.current) return;
       setResult(e.data);
       setBusy(false);
+    };
+    worker.current.onerror = () => {
+      setBusy(false);
+      setSolverError(true);
     };
     return () => worker.current?.terminate();
   }, []);
 
-  const set = <K extends keyof Params>(k: K, v: Params[K]) => setParams((p) => ({ ...p, [k]: v }));
+  function invalidatePlan() {
+    revision.current++;
+    setResult(null);
+    setBusy(false);
+    setSolverError(false);
+  }
+
+  const set = <K extends keyof Params>(k: K, v: Params[K]) => {
+    invalidatePlan();
+    setParams((p) => ({ ...p, [k]: v }));
+  };
 
   function applyScenario(s: Scenario) {
     setScenarioId(s.id);
     setDepot(s.depot);
     setPoints(s.points);
-    setResult(null);
-    map?.flyTo({ center: [s.depot.lon, s.depot.lat], zoom: 11.5 });
+    invalidatePlan();
+    setCsvErrors([]);
+    if (map) framePoints(map, s.depot, s.points);
   }
 
   function changeStops(next: ScenarioPoint[]) {
     setPoints(next.slice(0, MAX_POINTS));
     setScenarioId("custom");
-    setResult(null);
+    invalidatePlan();
   }
 
   function run() {
     if (!depot || !points.length || !worker.current || !cells) return;
     setBusy(true);
+    setSolverError(false);
     const req: SolveRequest = {
+      requestId: ++revision.current,
       depot,
       stops: points,
       capacity: params.capacity,
@@ -127,7 +149,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
       if (m === "add") changeStops([...pts, { ...ll, demand: 1, name: `Drop ${pts.length + 1}` }]);
       if (m === "depot") {
         setDepot(ll);
-        setResult(null);
+        invalidatePlan();
         setMode("none");
       }
     };
@@ -146,9 +168,9 @@ export function Optimizer({ dark }: { dark: boolean }) {
   useEffect(() => {
     if (map && depot && !framed.current) {
       framed.current = true;
-      map.jumpTo({ center: [depot.lon, depot.lat], zoom: 11.5 });
+      framePoints(map, depot, points);
     }
-  }, [map, depot]);
+  }, [map, depot, points]);
 
   const assignment = useMemo(() => {
     const a = new Map<number, number>();
@@ -214,7 +236,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
     }
   }, [map, depot, points, result, assignment, dark]);
 
-  if (!meta || !cells) return <div className="loading">Loading…</div>;
+  if (dataError || !meta || !cells) return <DataState error={dataError} />;
 
   const hasModel = cells.speedWeekday !== null;
   const cost = (r: { km: number; minutes: number }) => r.km * params.costPerKm + (r.minutes / 60) * params.costPerHour;
@@ -239,6 +261,12 @@ export function Optimizer({ dark }: { dark: boolean }) {
   return (
     <div className="layout">
       <aside className="panel">
+        <section className="panel-intro">
+          <p className="eyebrow">01 / Delivery operations</p>
+          <h1>Plan the next run.</h1>
+          <p>Start with a demo, adjust the fleet, then compare the plan with nearest-neighbor dispatch.</p>
+          <p className="small">Planning estimate: distances use a detour factor, not a road network. There are no delivery time windows.</p>
+        </section>
         <section>
           <h2>1 · Delivery points</h2>
           <div className="field">
@@ -274,7 +302,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
           <div className="row" style={{ marginTop: 8 }}>
             <label className="secondary" style={{ display: "inline-block" }}>
               Upload CSV
-              <input type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+              <input className="file-input" type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
             </label>
             <button className="secondary" onClick={() => changeStops([])}>Clear stops</button>
           </div>
@@ -329,9 +357,10 @@ export function Optimizer({ dark }: { dark: boolean }) {
         <button className="primary" onClick={run} disabled={busy || !points.length || !depot}>
           {busy ? "Optimizing…" : `Optimize ${points.length} stops`}
         </button>
+        {solverError && <p className="error" role="alert">The solver couldn’t finish. Try again or reload the page.</p>}
 
         {best && naive && (
-          <section>
+          <section aria-live="polite">
             <h2>Plan</h2>
             <div className="tiles">
               <Tile value={best.routes.length} label="Vans needed" delta={`vs ${naive.routes.length} nearest-neighbor`} />
@@ -401,4 +430,11 @@ function savings(before: number, after: number, unit: "km" | "R$"): string {
   if (before <= 0 || saved <= 0) return "same as nearest-neighbor";
   const amount = unit === "km" ? `${fmt.int(saved)} km` : fmt.brl(saved);
   return `${amount} (${fmt.pct(saved / before)}) saved vs nearest-neighbor`;
+}
+
+function framePoints(map: MlMap, depot: { lat: number; lon: number }, points: ScenarioPoint[]) {
+  const locations = [depot, ...points];
+  const lons = locations.map((p) => p.lon);
+  const lats = locations.map((p) => p.lat);
+  map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 50, maxZoom: 13, duration: 0 });
 }

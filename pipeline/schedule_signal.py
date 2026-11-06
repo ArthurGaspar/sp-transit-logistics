@@ -1,8 +1,4 @@
-"""Measures how much location-dependent speed information the GTFS schedule carries.
-
-Short answer: almost none. This analysis is published in the app's model card
-to explain why the speed model is trained on Olho Vivo GPS data instead.
-"""
+"""Evaluates location and route features as predictors of scheduled trip speed."""
 
 import h3
 import numpy as np

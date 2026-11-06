@@ -17,8 +17,7 @@ RAIL_ROUTE_TYPES = (1, 2)
 LOW_BUSES_PER_HOUR = 60
 GOOD_BUSES_PER_HOUR = 240
 MAX_WALK_TO_STOP_M = 500
-# Without population data, cells this far from any stop are assumed to be largely
-# uninhabited (reservoirs, Atlantic forest, parks) and are kept out of gap rankings.
+# Distance cutoff for the separate remote class; population is unknown.
 REMOTE_STOP_M = 1500
 # Degree-to-km factors around latitude -23.6, for local planar distances.
 KM_PER_DEG_LAT = 110.6

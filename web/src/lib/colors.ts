@@ -1,10 +1,9 @@
 import type { AccessCode } from "../data";
 
-/** Status palette: access levels are states, so they use reserved status colors plus a label. */
 export const ACCESS_COLORS: Record<AccessCode, string> = {
-  good: "#0ca30c",
-  fair: "#fab219",
-  low: "#d03b3b",
+  good: "#377d68",
+  fair: "#d3ac50",
+  low: "#be553c",
   remote: "#9a9992",
   no_data: "rgba(0,0,0,0)",
 };
@@ -13,8 +12,8 @@ export const ACCESS_LABELS: Record<AccessCode, string> = {
   good: "Good",
   fair: "Fair",
   low: "Low",
-  remote: "Remote (likely uninhabited)",
-  no_data: "No open GTFS (ABC)",
+  remote: "Remote from stops (population unknown)",
+  no_data: "Outside this feed’s coverage (ABC)",
 };
 
 /** Single-hue sequential ramp (blue), light to dark. */

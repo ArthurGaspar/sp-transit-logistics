@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { HBarChart, HourlyLine } from "../components/charts";
-import { Tile, fmt } from "../components/ui";
+import { DataState, Tile, fmt } from "../components/ui";
 import { load, type Meta } from "../data";
 
 const FEATURE_SET_LABELS: Record<string, string> = {
@@ -23,10 +23,11 @@ const FEATURE_LABELS: Record<string, string> = {
 
 export function Model() {
   const [meta, setMeta] = useState<Meta | null>(null);
+  const [error, setError] = useState(false);
   useEffect(() => {
-    load<Meta>("meta.json").then(setMeta);
+    load<Meta>("meta.json").then(setMeta).catch(() => setError(true));
   }, []);
-  if (!meta) return <div className="loading">Loading…</div>;
+  if (error || !meta) return <DataState error={error} />;
 
   const s = meta.scheduleSignal;
   const m = meta.speedModel;
@@ -35,15 +36,15 @@ export function Model() {
     <div className="page">
       <div className="page-inner">
         <section>
-          <h2>Model & data</h2>
-          <h3 style={{ fontSize: 22, letterSpacing: "-0.02em" }}>Why the speed model learns from live GPS, not the timetable</h3>
+          <p className="eyebrow">03 / Method & evidence</p>
+          <h1 className="method-title">A timetable is not a traffic sensor.</h1>
           <p>
-            The SPTrans GTFS timetable does not say where or when buses run slowly. The pipeline checks this on every build:
+            Scheduled service can describe network coverage. It does not measure actual traffic or reliability. This pipeline tests whether location features predict scheduled trip speeds before using a separate GPS-based model.
           </p>
         </section>
 
         <div className="tiles" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-          <Tile value={fmt.dec(s.within_trip_time_vs_distance_r, 2)} label="Correlation of stop-to-stop time with distance" delta="Median per trip. Stop times are synthetic." />
+          <Tile value={fmt.dec(s.within_trip_time_vs_distance_r, 2)} label="Correlation of stop-to-stop time with distance" delta="Median per trip; this does not establish how stop times were produced." />
           <Tile value={fmt.dec(s.speed_vs_center_distance_r, 3)} label="Correlation of trip speed with distance to center" delta={`${fmt.int(s.trips)} bus trip patterns`} />
           <Tile value={`${fmt.dec(s.mean_speed_kmh)} km/h`} label="Mean scheduled bus speed" delta={`median ${fmt.dec(s.median_speed_kmh)} km/h`} />
         </div>
@@ -58,9 +59,8 @@ export function Model() {
             domain={[-0.2, 0.3]}
           />
           <p style={{ marginTop: 10 }}>
-            Location features score below zero, and all four together reach {fmt.dec(s.cv_r2.both?.r2 ?? 0, 2)}, mostly from stop
-            spacing and route length. The speed model therefore trains on vehicle positions from the SPTrans <b>Olho Vivo</b> API,
-            collected by a scheduled GitHub Action.
+            Location features score {fmt.dec(s.cv_r2.location?.r2 ?? 0, 2)}; all four features together score {fmt.dec(s.cv_r2.both?.r2 ?? 0, 2)}.
+            These are predictions of scheduled trip speed, not observed road speed. The separate speed model uses vehicle positions from the SPTrans <b>Olho Vivo</b> API.
           </p>
         </section>
 
@@ -101,10 +101,11 @@ export function Model() {
               <p className="small" style={{ marginBottom: 0 }}>
                 How it works: every 30 minutes a GitHub Action takes two snapshots of every bus position 75 s apart, turns
                 displacements into speeds, and commits only per-hexagon hourly aggregates to the <code>realtime-data</code> branch.
-                The weekly site build retrains on everything collected so far. Until then, the optimizer uses a single average speed.
+                The weekly site build retrains on collected data. Until then, the optimizer uses an editable average speed.
               </p>
             </div>
           )}
+          <p className="small" style={{ marginTop: 12 }}>Bus speed is an experimental proxy for van travel. These scores do not validate delivery arrival times.</p>
         </section>
 
         <section className="card">
@@ -113,15 +114,13 @@ export function Model() {
             <li><b>Grid:</b> Uber H3 resolution 8 hexagons (~0.74 km², ~460 m edge) over São Paulo and the seven Grande ABC municipalities.</li>
             <li>
               <b>Access:</b> scheduled bus passes per hour within the hexagon and its six neighbors (~1 km) during the 7-8 am weekday peak,
-              from <code>frequencies.txt</code>; walk = straight line from the hexagon center to the nearest stop. Low: under{" "}
-              {meta.thresholds.lowBusesPerHour} buses/h or over {meta.thresholds.maxWalkToStopM} m. Good: {meta.thresholds.goodBusesPerHour}+ buses/h
-              or a metro/train station nearby.
+              from <code>frequencies.txt</code>; distance is a straight line from the hexagon center to the nearest stop. Without nearby rail, low means under{" "}
+              {meta.thresholds.lowBusesPerHour} buses/h or over {meta.thresholds.maxWalkToStopM} m. Good requires a stop within {meta.thresholds.maxWalkToStopM} m and either {meta.thresholds.goodBusesPerHour}+ buses/h or nearby rail. Other non-remote cells are fair.
             </li>
             <li>
-              <b>Remote:</b> no population data is used yet, so hexagons over {fmt.int(meta.thresholds.remoteStopM)} m from any stop are assumed to be
-              mostly uninhabited (reservoirs, Atlantic forest) and kept out of gap rankings. Adding IBGE census population is the next improvement.
+              <b>Remote:</b> cells over {fmt.int(meta.thresholds.remoteStopM)} m from any stop, without nearby rail, are kept out of the gap ranking. Their population is unknown: remoteness does not establish that nobody lives there. Headline shares use all São Paulo cells as the denominator, including remote cells.
             </li>
-            <li><b>ABC:</b> the ABC cities and EMTU publish no open GTFS, so the analysis covers the São Paulo side of the border.</li>
+            <li><b>ABC:</b> this feed does not represent the full ABC municipal or intermunicipal network. Access is scored on the São Paulo side only.</li>
             <li>
               <b>Routing:</b> capacitated VRP with a shift limit, solved in a Web Worker with Clarke-Wright savings, then 2-opt, relocate and swap
               local search. Distance = straight line × detour factor (default 1.3). Costs per km and per hour are editable assumptions, not quotes.

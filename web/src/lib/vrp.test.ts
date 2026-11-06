@@ -79,4 +79,24 @@ describe("solve", () => {
     expect(sol.routes).toEqual([]);
     expect(sol.km).toBe(0);
   });
+
+  it("keeps the source route within its shift when a relocation removes a fast intermediate stop", () => {
+    // Symmetric travel times can be non-metric when speeds vary by location.
+    const minutes = [
+      [0,32,7,36,55,47,24,4,74],
+      [32,0,2,5,73,33,72,51,20],
+      [7,2,0,29,24,24,3,34,9],
+      [36,5,29,0,1,29,23,10,71],
+      [55,73,24,1,0,21,18,60,54],
+      [47,33,24,29,21,0,18,41,35],
+      [24,72,3,23,18,18,0,70,14],
+      [4,51,34,10,60,41,70,0,1],
+      [74,20,9,71,54,35,14,1,0],
+    ];
+    const p: VrpProblem = { minutes, km: minutes, demand: Array(8).fill(1), capacity: 4, maxRouteMinutes: 120, serviceMinutes: 5 };
+    const best = solve(p);
+    expectValid(p, best);
+    expect(best.unassigned).toEqual([7]);
+    expect(best.minutes).toBeLessThanOrEqual(nearestNeighborPlan(p).minutes);
+  });
 });

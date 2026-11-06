@@ -3,6 +3,7 @@ import { buildMatrices, cellSpeed, constantSpeed } from "./travel";
 import { nearestNeighborPlan, solve, type VrpSolution } from "./vrp";
 
 export interface SolveRequest {
+  requestId: number;
   depot: LatLon;
   stops: (LatLon & { demand: number })[];
   capacity: number;
@@ -15,6 +16,7 @@ export interface SolveRequest {
 }
 
 export interface SolveResponse {
+  requestId: number;
   best: VrpSolution;
   naive: VrpSolution;
   ms: number;
@@ -42,6 +44,6 @@ self.onmessage = (e: MessageEvent<SolveRequest>) => {
   };
   const naive = nearestNeighborPlan(problem);
   const best = solve(problem);
-  const response: SolveResponse = { best, naive, ms: performance.now() - t0 };
+  const response: SolveResponse = { requestId: r.requestId, best, naive, ms: performance.now() - t0 };
   self.postMessage(response);
 };

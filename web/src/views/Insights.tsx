@@ -3,7 +3,7 @@ import type { Map as MlMap } from "maplibre-gl";
 import { cellToLatLng } from "h3-js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapView, setGeoJson } from "../components/MapView";
-import { Segmented, Slider, Tile, fmt } from "../components/ui";
+import { DataState, Segmented, Slider, Tile, fmt } from "../components/ui";
 import { load, type AccessCode, type Cells, type Meta, type Routes } from "../data";
 import { ACCESS_COLORS, ACCESS_LABELS, SEQUENTIAL, binIndex, quantileEdges } from "../lib/colors";
 import { cellFeatures } from "../lib/hex";
@@ -13,7 +13,7 @@ type Metric = "access" | "busesPeak" | "nearestStopM" | "speed";
 const METRIC_INFO: Record<Metric, { label: string; unit: string; legend: string }> = {
   access: { label: "Access level", unit: "", legend: "Transit access" },
   busesPeak: { label: "Buses / hour", unit: "buses/h", legend: "Scheduled bus passes per hour within ~1 km, 7-8 am weekday" },
-  nearestStopM: { label: "Walk to stop", unit: "m", legend: "Straight-line distance from hexagon center to the nearest stop" },
+  nearestStopM: { label: "Distance to stop", unit: "m", legend: "Straight-line distance from hexagon center to the nearest stop" },
   speed: { label: "Bus speed", unit: "km/h", legend: "Predicted weekday bus speed (Olho Vivo GPS model)" },
 };
 
@@ -31,6 +31,7 @@ export function Insights({ dark }: { dark: boolean }) {
   const [cellRoutes, setCellRoutes] = useState<Record<string, number[]> | null>(null);
   const [routes, setRoutes] = useState<Routes | null>(null);
   const [route, setRoute] = useState<number | null>(null);
+  const [routeError, setRouteError] = useState(false);
 
   useEffect(() => {
     Promise.all([load<Cells>("cells.json"), load<Meta>("meta.json")])
@@ -42,12 +43,12 @@ export function Insights({ dark }: { dark: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (selected === null || cellRoutes) return;
+    if (selected === null || cellRoutes || routeError) return;
     Promise.all([load<Record<string, number[]>>("cell-routes.json"), load<Routes>("routes.json")]).then(([cr, r]) => {
       setCellRoutes(cr);
       setRoutes(r);
-    });
-  }, [selected, cellRoutes]);
+    }).catch(() => setRouteError(true));
+  }, [selected, cellRoutes, routeError]);
 
   const index = useMemo(() => new Map(cells?.cell.map((c, i) => [c, i]) ?? []), [cells]);
   const values = useMemo(() => {
@@ -92,19 +93,6 @@ export function Insights({ dark }: { dark: boolean }) {
         filter: ["==", ["get", "i"], -1],
         paint: { "line-color": dark ? "#ffffff" : "#0b0b0b", "line-width": 2.5 },
       });
-      load<GeoJSON.FeatureCollection>("boundaries.json").then((b) => {
-        setGeoJson(map, "muni", b);
-        map.addLayer({
-          id: "muni",
-          type: "line",
-          source: "muni",
-          paint: {
-            "line-color": dark ? "#c3c2b7" : "#52514e",
-            "line-width": ["case", ["get", "abc"], 1, 1.6],
-            "line-dasharray": ["case", ["get", "abc"], ["literal", [3, 2]], ["literal", [1, 0]]],
-          },
-        });
-      });
       wireHover(map);
       map.on("click", "hex", (e) => {
         const i = e.features?.[0]?.properties?.i;
@@ -115,6 +103,26 @@ export function Insights({ dark }: { dark: boolean }) {
       });
     }
   }, [map, cells, meta, metric, hour, borderOnly]);
+
+  useEffect(() => {
+    if (!map) return;
+    let cancelled = false;
+    load<GeoJSON.FeatureCollection>("boundaries.json").then((b) => {
+      if (cancelled) return;
+      setGeoJson(map, "muni", b);
+      map.addLayer({
+        id: "muni",
+        type: "line",
+        source: "muni",
+        paint: {
+          "line-color": dark ? "#c3c2b7" : "#52514e",
+          "line-width": ["case", ["get", "abc"], 1, 1.6],
+          "line-dasharray": ["case", ["get", "abc"], ["literal", [3, 2]], ["literal", [1, 0]]],
+        },
+      });
+    }).catch(() => { /* The access grid remains usable without boundary lines. */ });
+    return () => { cancelled = true; };
+  }, [map, dark]);
 
   useEffect(() => {
     if (map?.getLayer("hex-selected")) map.setFilter("hex-selected", ["==", ["get", "i"], selected ?? -1]);
@@ -175,8 +183,7 @@ export function Insights({ dark }: { dark: boolean }) {
     map?.flyTo({ center: [lng, lat], zoom: 13 });
   };
 
-  if (error) return <div className="loading error">{error}</div>;
-  if (!cells || !meta) return <div className="loading">Loading network data…</div>;
+  if (error || !cells || !meta) return <DataState error={!!error} />;
 
   const k = meta.kpis;
   const hasSpeed = cells.speedWeekday !== null;
@@ -185,12 +192,18 @@ export function Insights({ dark }: { dark: boolean }) {
   return (
     <div className="layout">
       <aside className="panel">
+        <section className="panel-intro">
+          <p className="eyebrow">02 / Transit atlas</p>
+          <h1>Where does the network reach?</h1>
+          <p>Compare scheduled service across São Paulo. Select an area to inspect its stops and bus routes.</p>
+          <p className="small">Service on the timetable, not live reliability. Cell shares describe land area, not the share of residents.</p>
+        </section>
         <section>
           <h2>São Paulo bus network</h2>
           <div className="tiles">
             <Tile value={fmt.int(k.stops)} label="Stops" />
             <Tile value={fmt.int(k.busRoutes)} label="Bus routes" delta={`+ ${k.railRoutes} metro/rail lines`} />
-            <Tile value={fmt.pct(k.spLowShare)} label="Hexagons with low access" delta={`${fmt.pct(k.spRemoteShare)} remote, excluded`} />
+            <Tile value={fmt.pct(k.spLowShare)} label="All SP cells with low access" delta={`${fmt.pct(k.spRemoteShare)} separately classed as remote`} />
             <Tile value={fmt.pct(k.borderLowShare)} label="Low access on ABC border" delta={`${k.borderCells} hexagons within ${meta.thresholds.abcBorderKm} km`} />
           </div>
         </section>
@@ -249,7 +262,7 @@ export function Insights({ dark }: { dark: boolean }) {
           {metric === "access" && (
             <p className="small" style={{ marginTop: 6 }}>
               Low: under {meta.thresholds.lowBusesPerHour} buses/h within ~1 km or over {meta.thresholds.maxWalkToStopM} m to a stop.
-              Good: {meta.thresholds.goodBusesPerHour}+ buses/h or a metro/train station nearby. Remote: over{" "}
+              Good requires a stop within {meta.thresholds.maxWalkToStopM} m and either {meta.thresholds.goodBusesPerHour}+ buses/h or nearby rail. Remote: over{" "}
               {fmt.int(meta.thresholds.remoteStopM)} m from any stop.
             </p>
           )}
@@ -281,27 +294,28 @@ export function Insights({ dark }: { dark: boolean }) {
               </>
             ) : (
               <p className="small">
-                SPTrans data covers São Paulo city only, and the ABC municipalities publish no open GTFS feed, so access isn't scored here.
+                The selected SPTrans feed does not cover ABC municipal services or the complete intermunicipal network. Access is not scored here.
               </p>
             )}
           </section>
         )}
+        {routeError && <p className="error" role="alert">Route shapes couldn’t be loaded. <button className="secondary" onClick={() => setRouteError(false)}>Retry routes</button></p>}
 
         <section>
-          <h2>Worst-served hexagons on the ABC border</h2>
+          <h2>Low-service areas along the ABC border</h2>
           <p className="small">Low-access São Paulo hexagons within {meta.thresholds.abcBorderKm} km of the ABC, fewest buses first.</p>
           <table>
             <thead>
               <tr>
                 <th>Near stop</th>
                 <th className="num">Buses/h</th>
-                <th className="num">Walk</th>
+                <th className="num">Distance</th>
               </tr>
             </thead>
             <tbody>
               {meta.abcBorderGaps.map((g) => (
-                <tr key={g.cell} className="clickable" onClick={() => index.has(g.cell) && focusCell(index.get(g.cell)!)}>
-                  <td>{g.nearestStop}</td>
+                <tr key={g.cell}>
+                  <td><button className="table-button" onClick={() => index.has(g.cell) && focusCell(index.get(g.cell)!)}>{g.nearestStop}</button></td>
                   <td className="num">{fmt.int(g.busesPeak)}</td>
                   <td className="num">{fmt.int(g.nearestStopM)} m</td>
                 </tr>

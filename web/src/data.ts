@@ -99,8 +99,11 @@ export function load<T>(name: string): Promise<T> {
     cache.set(
       name,
       fetch(url).then((r) => {
-        if (!r.ok) throw new Error(`Could not load ${url} (${r.status}). Run the pipeline first.`);
+        if (!r.ok) throw new Error(`Could not load ${url} (${r.status}).`);
         return r.json();
+      }).catch((error) => {
+        cache.delete(name);
+        throw error;
       }),
     );
   }

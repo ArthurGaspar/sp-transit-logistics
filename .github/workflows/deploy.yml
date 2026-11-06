@@ -59,6 +59,7 @@ jobs:
         run: |
           npm ci
           npm test
+          npm run benchmark
           npm run build
 
       - uses: actions/upload-pages-artifact@v3
