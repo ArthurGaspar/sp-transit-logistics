@@ -1,0 +1,29 @@
+{
+  "id": "ufabc-abc",
+  "name": "UFABC SBC · estações do ABC",
+  "description": "Saída e retorno: UFABC São Bernardo do Campo. Paradas em São Caetano, Santo André e Rudge Ramos.",
+  "depot": {
+    "lat": -23.67763,
+    "lon": -46.56445
+  },
+  "points": [
+    {
+      "lat": -23.61006,
+      "lon": -46.57006,
+      "demand": 1,
+      "name": "Estação São Caetano do Sul"
+    },
+    {
+      "lat": -23.65212,
+      "lon": -46.5282,
+      "demand": 1,
+      "name": "Estação Santo André"
+    },
+    {
+      "lat": -23.65538,
+      "lon": -46.57101,
+      "demand": 1,
+      "name": "Praça São João Batista · Rudge Ramos"
+    }
+  ]
+}

@@ -31,6 +31,8 @@ Changing the workload or planning inputs clears the previous result. Stops that 
 
 ![Route optimizer with settings, calculated delivery routes, and dispatch results](docs/route-planner.png)
 
+[Local route example: UFABC São Bernardo → Rudge Ramos → São Caetano station → Santo André station → UFABC](docs/ufabc-abc-route.md), with a screenshot, inputs, and location sources.
+
 ### Import and saved work
 
 CSV input accepts latitude and longitude, with optional demand and name columns:
