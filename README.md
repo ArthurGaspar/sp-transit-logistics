@@ -4,7 +4,7 @@ A browser-based workspace for delivery planning and transit coverage in São Pau
 
 [Open the project](https://arthurgaspar.github.io/sp-transit-logistics/) · [Engineering decisions](#engineering-decisions) · [Routing benchmark](docs/benchmark.md)
 
-![Operations desk](docs/overview.png)
+![Operations desk with workload footprints, network counts, and saved work](docs/operations-desk.png)
 
 ## Workspace
 
@@ -29,7 +29,7 @@ The tilted workload preview plots the selected workload’s actual stop location
 
 Changing the workload or planning inputs clears the previous result. Stops that cannot be served within the capacity or shift constraints are reported separately.
 
-![Route optimizer with settings, map, and dispatch results](docs/optimizer.png)
+![Route optimizer with settings, calculated delivery routes, and dispatch results](docs/route-planner.png)
 
 ### Import and saved work
 
@@ -49,7 +49,7 @@ Files are processed in the browser. **Save draft** stores one draft in browser s
 
 The atlas provides access level, scheduled buses per hour, and straight-line distance to a stop. The bus-speed layer is available only when a GPS model has been trained. Select an area to inspect its nearby routes, or open an entry in the Operations border-area table to select and center that cell directly.
 
-![Transit atlas](docs/insights.png)
+![Transit atlas with access-level polygons and the ABC border filter](docs/transit-atlas.png)
 
 ## Project context
 
