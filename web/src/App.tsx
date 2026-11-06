@@ -9,23 +9,24 @@ const Model = lazy(() => import("./views/Model").then((m) => ({ default: m.Model
 type Tab = "overview" | "insights" | "optimizer" | "model";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "The project" },
+  { id: "overview", label: "Operations" },
   { id: "optimizer", label: "Route optimizer" },
   { id: "insights", label: "Transit atlas" },
-  { id: "model", label: "Model & data" },
+  { id: "model", label: "Data & methods" },
 ];
 
 function tabFromHash(): Tab {
-  const h = window.location.hash.slice(1);
+  const h = window.location.hash.slice(1).split("?")[0];
   return TABS.some((t) => t.id === h) ? (h as Tab) : "overview";
 }
 
 export function App() {
-  const [tab, setTab] = useState<Tab>(tabFromHash);
+  const [location, setLocation] = useState(() => window.location.hash);
+  const tab = tabFromHash();
   const { dark, choice, cycle } = useTheme();
 
   useEffect(() => {
-    const onHash = () => setTab(tabFromHash());
+    const onHash = () => setLocation(window.location.hash);
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -34,7 +35,7 @@ export function App() {
     <div className="app">
       <a className="skip-link" href="#main-content" onClick={(e) => { e.preventDefault(); document.getElementById("main-content")?.focus(); }}>Skip to content</a>
       <header className="topbar">
-        <a className="brand" href="#overview" aria-label="SP Transit Logistics — project overview">
+        <a className="brand" href="#overview" aria-label="SP Transit Logistics — operations desk">
           <span className="brand-mark" aria-hidden="true">sp<span>↗</span></span>
           <span className="brand-name">Transit Logistics<small>São Paulo / Grande ABC</small></span>
         </a>
@@ -56,7 +57,7 @@ export function App() {
           Source ↗
         </a>
       </header>
-      <main id="main-content" className="workspace" key={tab} tabIndex={-1}>
+      <main id="main-content" className="workspace" key={location} tabIndex={-1}>
         <Suspense fallback={<div className="loading" role="status">Opening the workspace…</div>}>
           {tab === "overview" && <Overview />}
           {tab === "insights" && <Insights dark={dark} />}

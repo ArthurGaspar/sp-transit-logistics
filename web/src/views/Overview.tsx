@@ -1,55 +1,72 @@
+import { useEffect, useState } from "react";
+import { DataState, fmt } from "../components/ui";
+import { load, type Meta, type Scenario } from "../data";
+import { deleteDraft, readDraft } from "../lib/draft";
+import { WorkloadPlot } from "../components/WorkloadPlot";
+
 export function Overview() {
-  return (
-    <div className="page overview">
-      <div className="overview-inner">
-        <div className="project-byline"><span>Independent project / Arthur Gaspar</span><span>São Caetano do Sul, SP</span></div>
-        <section className="project-intro">
-          <div>
-            <p className="eyebrow">Urban mobility · delivery operations</p>
-            <h1>One city.<br />Many ways<br />to <em>get there.</em></h1>
-            <p className="intro-copy">Explore where São Paulo’s bus network reaches. Then build a delivery plan across the city and the Grande ABC.</p>
-            <div className="intro-actions">
-              <a className="primary" href="#optimizer">Try the route optimizer <span aria-hidden="true">↗</span></a>
-              <a className="text-link" href="#insights">Explore the transit atlas →</a>
-            </div>
-          </div>
-          <div className="route-print" aria-label="Schematic delivery loop from a São Caetano hub through São Paulo and back. Illustration, not a calculated route." role="img">
-            <div className="print-heading"><span>SP / ABC</span><span>FIELD NOTES — 01</span></div>
-            <svg viewBox="0 0 480 360" aria-hidden="true">
-              <defs><pattern id="street-grid" width="36" height="36" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)"><path d="M 36 0 L 0 0 0 36" fill="none" stroke="currentColor" strokeWidth="0.6" /></pattern></defs>
-              <rect width="480" height="360" fill="url(#street-grid)" opacity="0.22" />
-              <path d="M345 0 C270 95 340 165 240 230 S215 305 175 360" className="print-river" />
-              <path d="M40 290 L180 95 L278 70 L410 235 L310 290 Z" className="print-baseline" />
-              <path d="M310 290 L410 235 L278 70 L180 95 L40 290 Z" className="print-route" />
-              {[[40,290],[180,95],[278,70],[410,235]].map(([x,y], i) => <g key={i}><circle cx={x} cy={y} r="8" className="print-stop" /><text x={x + 15} y={y - 14}>0{i + 1}</text></g>)}
-              <rect x="300" y="280" width="20" height="20" className="print-hub" />
-              <text x="157" y="46" className="print-place">SÃO PAULO</text>
-              <text x="257" y="329" className="print-place">SÃO CAETANO DO SUL</text>
-            </svg>
-            <div className="print-caption"><span><i /> Delivery loop</span><span>Schematic / not to scale</span></div>
-          </div>
-        </section>
-        <section className="project-context">
-          <div><p className="eyebrow">The context</p><h2>Local geography.<br />Practical engineering.</h2></div>
-          <div>
-            <p>I’m Arthur, a full-stack developer based in São Caetano do Sul. My work at Shippify involved logistics dashboards and routing systems; my research at UFABC involved Python data pipelines and scientific dashboards.</p>
-            <p>This independent project brings those experiences together using public data. The atlas studies scheduled transit access. The optimizer tests delivery plans against a simple dispatch baseline. They share a geography, but answer different questions.</p>
-            <a className="text-link" href="https://github.com/ArthurGaspar">More of my work ↗</a>
-          </div>
-        </section>
-        <section className="project-chapters" aria-label="Explore the project">
-          <a href="#optimizer" className="chapter"><span className="chapter-number">01 / INTERACT</span><h2>A delivery plan you can inspect.</h2><p>Change capacity, shift length, and stops. Compare the result with nearest-neighbor dispatch and export the plan.</p><span className="text-link">Open the optimizer ↗</span></a>
-          <a href="#insights" className="chapter"><span className="chapter-number">02 / EXPLORE</span><h2>Read the network, area by area.</h2><p>Inspect peak-hour service and distance to stops. Focus on the São Paulo side of the ABC border.</p><span className="text-link">Open the atlas ↗</span></a>
-          <a href="#model" className="chapter"><span className="chapter-number">03 / EXAMINE</span><h2>The assumptions are part of the result.</h2><p>See what the timetable measures, why GPS is a separate model, and where these estimates fall short.</p><span className="text-link">Read the method ↗</span></a>
-        </section>
-        <section className="engineering-note">
-          <p className="eyebrow">Under the hood</p>
-          <h2>Python builds the data.<br />The browser does the planning.</h2>
-          <p>A typed React interface, a routing solver in a Web Worker, and a Python pipeline deployed through GitHub Actions. Delivery files are processed locally. No application server is needed.</p>
-          <a className="text-link" href="https://github.com/ArthurGaspar/sp-transit-logistics#engineering-decisions">Read the engineering decisions ↗</a>
-        </section>
-        <footer className="project-footer"><span>Built by Arthur Gaspar · Independent portfolio project</span><span>SPTrans / IBGE / OpenStreetMap</span></footer>
+  const [data, setData] = useState<{ meta: Meta; scenarios: Scenario[] } | null>(null);
+  const [error, setError] = useState(false);
+  const [selected, setSelected] = useState(0);
+  const [draft, setDraft] = useState(readDraft);
+  const [draftError, setDraftError] = useState(false);
+  useEffect(() => {
+    Promise.all([load<Meta>("meta.json"), load<Scenario[]>("scenarios.json")])
+      .then(([meta, scenarios]) => { if (!scenarios.length) throw new Error("No workloads"); setData({ meta, scenarios }); })
+      .catch(() => setError(true));
+  }, []);
+  if (error || !data) return <DataState error={error} />;
+  const { meta, scenarios } = data;
+  const scenario = scenarios[selected];
+  const demand = scenario.points.reduce((sum, p) => sum + p.demand, 0);
+
+  return <div className="page operations">
+    <div className="desk">
+      <header className="desk-heading">
+        <div><p className="eyebrow">SP / ABC · Operations desk</p><h1>Workloads & coverage</h1></div>
+        <div className="dataset-stamp"><span className="status-square" /> Dataset snapshot<strong>{new Date(meta.generatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</strong></div>
+      </header>
+      <div className="network-strip" aria-label="Network summary">
+        <div><span>Network stops</span><strong>{fmt.int(meta.kpis.stops)}</strong></div>
+        <div><span>Bus routes</span><strong>{fmt.int(meta.kpis.busRoutes)}</strong></div>
+        <div><span>Low-access SP cells</span><strong>{fmt.pct(meta.kpis.spLowShare)}</strong></div>
+        <div><span>Low-access border cells</span><strong>{fmt.pct(meta.kpis.borderLowShare)}<small> / {meta.kpis.borderCells} cells</small></strong></div>
+        <a href="#insights">Network map <span aria-hidden="true">↗</span></a>
       </div>
+      <section className="dispatch-board" aria-labelledby="workloads-heading">
+        <div className="workload-list">
+          <div className="section-bar"><h2 id="workloads-heading">Delivery workloads</h2><span>Sample data</span></div>
+          <div className="workload-options" role="group" aria-label="Select workload">
+            {scenarios.map((s, i) => <button key={s.id} aria-pressed={selected === i} onClick={() => setSelected(i)}>
+              <span className="workload-code">0{i + 1}</span><span><strong>{s.name}</strong><small>{s.points.length} stops · {fmt.int(s.points.reduce((sum, p) => sum + p.demand, 0))} boxes</small></span><span className="workload-arrow" aria-hidden="true">↗</span>
+            </button>)}
+          </div>
+          <div className="workload-actions"><a className="primary" href={`#optimizer?scenario=${scenario.id}`}>Plan selected workload <span aria-hidden="true">→</span></a><a className="text-link" href="#optimizer?empty=1">New plan / import CSV →</a></div>
+          <p className="small data-note">Public locations · synthetic delivery demand</p>
+        </div>
+        <div className="workload-preview">
+          <div className="preview-coordinates">{Math.abs(scenario.depot.lat).toFixed(4)} S / {Math.abs(scenario.depot.lon).toFixed(4)} W <span>DEPOT</span></div>
+          <WorkloadPlot scenario={scenario} />
+          <div className="preview-facts"><div><strong>{scenario.points.length}</strong><span>delivery stops</span></div><div><strong>{demand}</strong><span>boxes to assign</span></div><div><strong>{Math.ceil(demand / 30)}<small> min.</small></strong><span>vans at 30 boxes*</span></div></div>
+          <p className="small">*Capacity lower bound. Shift constraints may require more vans.</p>
+        </div>
+      </section>
+      <div className="desk-lower">
+        <section className="coverage-queue">
+          <div className="section-bar"><h2>ABC border / low-service areas</h2><a href="#insights?border=1" className="text-link">Inspect on map ↗</a></div>
+          <table><thead><tr><th>Nearest stop</th><th className="num">Buses/h</th><th className="num">Distance</th><th><span className="sr-only">Action</span></th></tr></thead><tbody>
+            {meta.abcBorderGaps.slice(0, 4).map((g) => <tr key={g.cell}><td><a href={`#insights?cell=${g.cell}&border=1`}>{g.nearestStop}</a></td><td className="num">{fmt.dec(g.busesPeak)}</td><td className="num">{fmt.int(g.nearestStopM)} m</td><td aria-hidden="true">↗</td></tr>)}
+          </tbody></table>
+          <p className="small data-note">07:00–08:00 weekday schedule · straight-line distance · population not measured</p>
+        </section>
+        <section className="device-draft">
+          <div className="section-bar"><h2>Saved work</h2><span>This device</span></div>
+          {draft ? <><h3>{draft.scenarioId === "custom" ? "Custom delivery plan" : scenarios.find((s) => s.id === draft.scenarioId)?.name ?? "Delivery plan"}</h3><p>{draft.points.length} stops · {draft.params.capacity} boxes/van · {draft.params.shiftHours}h shift</p><p className="small">Saved {new Date(draft.savedAt).toLocaleString("en-GB")}</p><div className="row"><a className="secondary" href="#optimizer?draft=1">Resume draft →</a><button className="text-button" onClick={() => { if (deleteDraft()) setDraft(null); else setDraftError(true); }}>Delete</button></div></> : <><h3>No saved draft</h3><p>Save stops and fleet settings from the planner to continue here later.</p><a className="text-link" href="#optimizer?empty=1">Create a plan →</a></>}
+          {draftError && <p className="error" role="alert">The draft could not be deleted.</p>}
+          <div className="data-availability"><span className={`status-square ${meta.speedModel.status === "trained" ? "ready" : "waiting"}`} /><div><strong>GPS speed model</strong><span>{meta.speedModel.status === "trained" ? "Available · experimental bus-speed proxy" : "No trained model · use average speed"}</span></div><a href="#model" aria-label="GPS speed model details">↗</a></div>
+        </section>
+      </div>
+      <footer className="desk-footer"><span>SP Transit Logistics / Arthur Gaspar</span><span>SPTrans · IBGE · OpenStreetMap <a href="#model">Data & methods ↗</a></span></footer>
     </div>
-  );
+  </div>;
 }

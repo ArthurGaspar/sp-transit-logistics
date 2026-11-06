@@ -8,6 +8,8 @@ import { load, type AccessCode, type Cells, type Meta, type Routes } from "../da
 import { ACCESS_COLORS, ACCESS_LABELS, SEQUENTIAL, binIndex, quantileEdges } from "../lib/colors";
 import { cellFeatures } from "../lib/hex";
 
+import { workspaceQuery } from "../lib/draft";
+
 type Metric = "access" | "busesPeak" | "nearestStopM" | "speed";
 
 const METRIC_INFO: Record<Metric, { label: string; unit: string; legend: string }> = {
@@ -26,7 +28,7 @@ export function Insights({ dark }: { dark: boolean }) {
   const [map, setMap] = useState<MlMap | null>(null);
   const [metric, setMetric] = useState<Metric>("access");
   const [hour, setHour] = useState(8);
-  const [borderOnly, setBorderOnly] = useState(false);
+  const [borderOnly, setBorderOnly] = useState(() => workspaceQuery().has("border"));
   const [selected, setSelected] = useState<number | null>(null);
   const [cellRoutes, setCellRoutes] = useState<Record<string, number[]> | null>(null);
   const [routes, setRoutes] = useState<Routes | null>(null);
@@ -38,6 +40,8 @@ export function Insights({ dark }: { dark: boolean }) {
       .then(([c, m]) => {
         setCells(c);
         setMeta(m);
+        const requestedCell = c.cell.indexOf(workspaceQuery().get("cell") ?? "");
+        if (requestedCell >= 0) setSelected(requestedCell);
       })
       .catch((e) => setError(String(e)));
   }, []);
@@ -51,6 +55,17 @@ export function Insights({ dark }: { dark: boolean }) {
   }, [selected, cellRoutes, routeError]);
 
   const index = useMemo(() => new Map(cells?.cell.map((c, i) => [c, i]) ?? []), [cells]);
+  const initialFocus = useRef(false);
+  useEffect(() => {
+    const requested = workspaceQuery().get("cell");
+    if (!map || !cells || !requested || initialFocus.current) return;
+    const i = index.get(requested);
+    if (i === undefined) return;
+    initialFocus.current = true;
+    const [lat, lon] = cellToLatLng(cells.cell[i]);
+    map.jumpTo({ center: [lon, lat], zoom: 13 });
+  }, [map, cells, index]);
+
   const values = useMemo(() => {
     if (!cells || metric === "access") return null;
     const spOnly = cells.muni.map((m) => m === 0);
@@ -194,9 +209,8 @@ export function Insights({ dark }: { dark: boolean }) {
       <aside className="panel">
         <section className="panel-intro">
           <p className="eyebrow">02 / Transit atlas</p>
-          <h1>Where does the network reach?</h1>
-          <p>Compare scheduled service across São Paulo. Select an area to inspect its stops and bus routes.</p>
-          <p className="small">Service on the timetable, not live reliability. Cell shares describe land area, not the share of residents.</p>
+          <h1>Network coverage</h1>
+          <p className="small">Weekday 07:00–08:00 · scheduled service · area-based measures</p>
         </section>
         <section>
           <h2>São Paulo bus network</h2>
@@ -330,6 +344,7 @@ export function Insights({ dark }: { dark: boolean }) {
       </aside>
       <div className="map">
         <MapView dark={dark} onReady={setMap} />
+        <div className="map-toolbar"><span className="map-title">SP / ABC <small>{METRIC_INFO[metric].label}</small></span><span className="map-period">{metric === "speed" ? `Weekday · ${hour}:00` : "Weekday · 07:00–08:00"}</span></div>
       </div>
     </div>
   );

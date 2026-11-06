@@ -4,7 +4,7 @@ An independent project by [Arthur Gaspar](https://github.com/ArthurGaspar): a S�
 
 [Open the project](https://arthurgaspar.github.io/sp-transit-logistics/) · [Engineering decisions](#engineering-decisions) · [Routing benchmark](docs/benchmark.md)
 
-![Project introduction](docs/overview.png)
+![Operations desk](docs/overview.png)
 
 ## Why this project
 
@@ -13,9 +13,9 @@ I’m a full-stack developer based in São Caetano do Sul. At Shippify I worked 
 Two tools answer different questions:
 
 - **Transit atlas:** inspect scheduled peak-hour service, straight-line distance to stops, and the bus routes serving each area. A border filter focuses on the São Paulo side of the ABC.
-- **Delivery planner:** select a demo or import delivery points, set capacity and shift constraints, compare with nearest-neighbor dispatch, and export a route sequence. Input files stay in the browser.
+- **Delivery planner:** select a demo or import delivery points, set capacity and shift constraints, compare with nearest-neighbor dispatch, and export a route sequence. Input files stay in the browser. Save a draft on the device to resume the stops and fleet settings later; results are recalculated. The stop manifest supports demand edits and removals, and selecting a calculated route shows its stop order and highlights it on the map.
 
-The **Model & data** view explains the measurements, validation, and limitations. The project overview connects the working tools to the engineering choices behind them.
+The **Operations** desk shows workload footprints, network counts, low-service border areas, and a saved draft. Workloads open directly in the planner; border areas open at their selected map cell. **Data & methods** contains dataset and model diagnostics.
 
 ![Transit atlas](docs/insights.png)
 
@@ -26,7 +26,7 @@ The **Model & data** view explains the measurements, validation, and limitations
 | Python pipeline → static JSON | Network analysis and model training happen at build time. Pages can serve the result without an application server, at the cost of snapshot rather than live data. |
 | React + TypeScript | Shared data and worker contracts make the pipeline outputs and solver messages explicit. Data-load failures have a retry path. |
 | Solver in a Web Worker | Local search leaves the interface responsive. Request IDs prevent an old job from replacing results after the inputs change. |
-| Lazy-loaded workspaces | The introduction does not load the mapping engine or routing worker. Route shapes are requested only after an area is selected. |
+| Lazy-loaded workspaces | The operations desk does not load the mapping engine or routing worker. Route shapes are requested only after an area is selected. |
 | Explicit comparison baseline | Nearest-neighbor dispatch is also a solver starting point. Tests check feasibility and that the driving-time objective does not regress against that baseline. |
 | GitHub Actions + Pages | Tests and builds run before deployment; scheduled jobs refresh the feed and collect optional GPS aggregates. Reproduction needs no paid service. |
 
@@ -97,7 +97,7 @@ npm run benchmark
 npm run build
 ```
 
-The web tests cover routing feasibility, baseline comparison, spatial travel estimates, and CSV import. The solver regression suite includes a non-metric travel-time case where removing a stop could otherwise leave a route over its shift limit.
+The web tests cover routing feasibility, baseline comparison, spatial travel estimates, CSV import, and safe recovery of saved drafts. The solver regression suite includes a non-metric travel-time case where removing a stop could otherwise leave a route over its shift limit.
 
 ## Deployment and optional GPS collection
 

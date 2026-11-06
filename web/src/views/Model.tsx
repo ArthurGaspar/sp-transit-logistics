@@ -36,10 +36,10 @@ export function Model() {
     <div className="page">
       <div className="page-inner">
         <section>
-          <p className="eyebrow">03 / Method & evidence</p>
-          <h1 className="method-title">A timetable is not a traffic sensor.</h1>
+          <p className="eyebrow">03 / Data quality</p>
+          <h1 className="method-title">Data & model diagnostics</h1>
           <p>
-            Scheduled service can describe network coverage. It does not measure actual traffic or reliability. This pipeline tests whether location features predict scheduled trip speeds before using a separate GPS-based model.
+            Dataset built {new Date(meta.generatedAt).toLocaleString("en-GB")}. Scheduled service and observed GPS speeds are evaluated separately.
           </p>
         </section>
 
@@ -98,11 +98,7 @@ export function Model() {
               <p>
                 <b>Waiting for live data.</b> The model trains automatically once it has {m.need}. Current: {m.have}.
               </p>
-              <p className="small" style={{ marginBottom: 0 }}>
-                How it works: every 30 minutes a GitHub Action takes two snapshots of every bus position 75 s apart, turns
-                displacements into speeds, and commits only per-hexagon hourly aggregates to the <code>realtime-data</code> branch.
-                The weekly site build retrains on collected data. Until then, the optimizer uses an editable average speed.
-              </p>
+              <p className="small" style={{ marginBottom: 0 }}>Average-speed planning remains available. GPS observations are aggregated by area and hour; the model is updated when a new dataset is built.</p>
             </div>
           )}
           <p className="small" style={{ marginTop: 12 }}>Bus speed is an experimental proxy for van travel. These scores do not validate delivery arrival times.</p>
@@ -125,7 +121,6 @@ export function Model() {
               <b>Routing:</b> capacitated VRP with a shift limit, solved in a Web Worker with Clarke-Wright savings, then 2-opt, relocate and swap
               local search. Distance = straight line × detour factor (default 1.3). Costs per km and per hour are editable assumptions, not quotes.
             </li>
-            <li><b>Hosting:</b> everything is precomputed into static JSON by a Python pipeline and served from GitHub Pages. No backend, no API keys in the browser.</li>
           </ul>
         </section>
 

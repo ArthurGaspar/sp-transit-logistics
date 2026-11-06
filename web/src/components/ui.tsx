@@ -2,8 +2,8 @@ import { useId, type ReactNode } from "react";
 
 export function DataState({ error = false }: { error?: boolean }) {
   return <div className="load-state" role={error ? "alert" : "status"}>
-    <h1>{error ? "The project data couldn’t be loaded." : "Loading the São Paulo dataset…"}</h1>
-    <p>{error ? "Check your connection and try again. If this continues, the published dataset may be unavailable." : "Preparing the network and delivery scenarios."}</p>
+    <h1>{error ? "Dataset unavailable" : "Loading network data…"}</h1>
+    <p>{error ? "Check your connection, then retry the dataset." : "Loading network coverage and delivery workloads."}</p>
     {error && <button className="secondary" onClick={() => window.location.reload()}>Try again</button>}
   </div>;
 }

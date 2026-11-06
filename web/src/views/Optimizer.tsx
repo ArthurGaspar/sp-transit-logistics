@@ -7,22 +7,9 @@ import { routeStyle } from "../lib/colors";
 import { parseDeliveryCsv } from "../lib/csv";
 import type { SolveRequest, SolveResponse } from "../lib/solver.worker";
 
+import { DEFAULT_PARAMS, readDraft, saveDraft, workspaceQuery, type PlanParams } from "../lib/draft";
+
 type ClickMode = "none" | "add" | "depot";
-type SpeedMode = "constant" | "model";
-
-interface Params {
-  capacity: number;
-  shiftHours: number;
-  serviceMinutes: number;
-  circuity: number;
-  constantKmh: number;
-  speedMode: SpeedMode;
-  hour: number;
-  vehicleFactor: number;
-  costPerKm: number;
-  costPerHour: number;
-}
-
 const MAX_POINTS = 250;
 
 export function Optimizer({ dark }: { dark: boolean }) {
@@ -33,18 +20,9 @@ export function Optimizer({ dark }: { dark: boolean }) {
   const [depot, setDepot] = useState<{ lat: number; lon: number } | null>(null);
   const [points, setPoints] = useState<ScenarioPoint[]>([]);
   const [mode, setMode] = useState<ClickMode>("none");
-  const [params, setParams] = useState<Params>({
-    capacity: 30,
-    shiftHours: 8,
-    serviceMinutes: 5,
-    circuity: 1.3,
-    constantKmh: 20,
-    speedMode: "constant",
-    hour: 10,
-    vehicleFactor: 1.3,
-    costPerKm: 1.2,
-    costPerHour: 35,
-  });
+  const [params, setParams] = useState<PlanParams>(DEFAULT_PARAMS);
+  const [draftNotice, setDraftNotice] = useState("");
+  const [selectedRoute, setSelectedRoute] = useState<number | null>(null);
   const [result, setResult] = useState<SolveResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [dataError, setDataError] = useState(false);
@@ -60,7 +38,21 @@ export function Optimizer({ dark }: { dark: boolean }) {
       setScenarios(s);
       setCells(c);
       if (!s.length) throw new Error("No delivery scenarios available");
-      applyScenario(s[0]);
+      const query = workspaceQuery();
+      const draft = query.has("draft") ? readDraft() : null;
+      if (draft) {
+        setScenarioId(draft.scenarioId);
+        setDepot(draft.depot);
+        setPoints(draft.points);
+        setParams({ ...draft.params, speedMode: c.speedWeekday ? draft.params.speedMode : "constant" });
+        setDraftNotice("Draft restored · recalculate to update results");
+      } else if (query.has("empty")) {
+        setScenarioId("custom");
+        setDepot(s[0].depot);
+        setPoints([]);
+      } else {
+        applyScenario(s.find((item) => item.id === query.get("scenario")) ?? s[0]);
+      }
     }).catch(() => setDataError(true));
     worker.current = new Worker(new URL("../lib/solver.worker.ts", import.meta.url), { type: "module" });
     worker.current.onmessage = (e: MessageEvent<SolveResponse>) => {
@@ -80,9 +72,11 @@ export function Optimizer({ dark }: { dark: boolean }) {
     setResult(null);
     setBusy(false);
     setSolverError(false);
+    setDraftNotice("");
+    setSelectedRoute(null);
   }
 
-  const set = <K extends keyof Params>(k: K, v: Params[K]) => {
+  const set = <K extends keyof PlanParams>(k: K, v: PlanParams[K]) => {
     invalidatePlan();
     setParams((p) => ({ ...p, [k]: v }));
   };
@@ -201,7 +195,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
       type: "FeatureCollection",
       features: (result?.best.routes ?? []).map((r, ri) => ({
         type: "Feature",
-        properties: routeStyle(ri, dark),
+        properties: { ...routeStyle(ri, dark), routeIndex: ri },
         geometry: {
           type: "LineString",
           coordinates: [depot, ...r.stops.map((s) => points[s]), depot].map((p) => [p.lon, p.lat]),
@@ -236,6 +230,13 @@ export function Optimizer({ dark }: { dark: boolean }) {
     }
   }, [map, depot, points, result, assignment, dark]);
 
+  useEffect(() => {
+    if (!map?.getLayer("plan-solid")) return;
+    // Route colors remain consistent between the table, stops and map.
+    map.setPaintProperty("plan-solid", "line-opacity", selectedRoute === null ? 0.9 : ["case", ["==", ["get", "routeIndex"], selectedRoute], 1, 0.15]);
+    map.setPaintProperty("plan-dashed", "line-opacity", selectedRoute === null ? 0.9 : ["case", ["==", ["get", "routeIndex"], selectedRoute], 1, 0.15]);
+  }, [map, result, selectedRoute]);
+
   if (dataError || !meta || !cells) return <DataState error={dataError} />;
 
   const hasModel = cells.speedWeekday !== null;
@@ -259,18 +260,27 @@ export function Optimizer({ dark }: { dark: boolean }) {
   }
 
   return (
-    <div className="layout">
+    <div className="layout optimizer-layout">
       <aside className="panel">
         <section className="panel-intro">
-          <p className="eyebrow">01 / Delivery operations</p>
-          <h1>Plan the next run.</h1>
-          <p>Start with a demo, adjust the fleet, then compare the plan with nearest-neighbor dispatch.</p>
-          <p className="small">Planning estimate: distances use a detour factor, not a road network. There are no delivery time windows.</p>
+          <p className="eyebrow">01 / Dispatch</p>
+          <h1>Route planner</h1>
+          <span className="small">{points.length} stops · {fmt.int(totalDemand)} boxes · {scenarioId === "custom" ? "Custom workload" : "Sample workload"}</span>
         </section>
+        <div className="plan-commands">
+          <button className="primary" onClick={run} disabled={busy || !points.length || !depot}>{busy ? "Calculating…" : `Calculate ${points.length} stops`}</button>
+          <button className="secondary" disabled={!points.length || !depot} onClick={() => {
+            if (!depot) return;
+            const saved = saveDraft({ version: 1, savedAt: new Date().toISOString(), scenarioId, depot, points, params });
+            setDraftNotice(saved ? "Draft saved on this device" : "Draft could not be saved on this device");
+          }}>Save draft</button>
+          {draftNotice && <p className="small" role="status">{draftNotice}</p>}
+          {solverError && <p className="error" role="alert">Calculation failed. Retry or reload the page.</p>}
+        </div>
         <section>
-          <h2>1 · Delivery points</h2>
+          <h2>Stops & depot</h2>
           <div className="field">
-            <label htmlFor="scenario">Demo scenario</label>
+            <label htmlFor="scenario">Workload</label>
             <select
               id="scenario"
               value={scenarioId}
@@ -282,23 +292,11 @@ export function Optimizer({ dark }: { dark: boolean }) {
               {scenarios.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
-              {scenarioId === "custom" && <option value="custom">Custom points</option>}
+              {scenarioId === "custom" && <option value="custom">Custom workload</option>}
             </select>
           </div>
-          <p className="small" style={{ marginTop: 6 }}>
-            {scenarios.find((s) => s.id === scenarioId)?.description ?? "Your own points."} {points.length} stops, {fmt.int(totalDemand)} boxes.
-          </p>
-          <div className="row">
-            <Segmented
-              label="Map click action"
-              value={mode}
-              onChange={(m) => setMode(mode === m ? "none" : m)}
-              options={[
-                { value: "add", label: "Click to add stops" },
-                { value: "depot", label: "Move depot" },
-              ]}
-            />
-          </div>
+          <p className="small" style={{ marginTop: 6 }}>{scenarios.find((s) => s.id === scenarioId)?.description ?? "Custom delivery locations."}</p>
+          <p className="small">Depot: {depot?.lat.toFixed(4)}, {depot?.lon.toFixed(4)}</p>
           <div className="row" style={{ marginTop: 8 }}>
             <label className="secondary" style={{ display: "inline-block" }}>
               Upload CSV
@@ -307,7 +305,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
             <button className="secondary" onClick={() => changeStops([])}>Clear stops</button>
           </div>
           <p className="small" style={{ marginTop: 6 }}>
-            CSV columns: <code>lat, lon, demand, name</code> (header optional; <code>;</code> with decimal commas works too). Files never leave your browser.
+            <code>lat, lon, demand, name</code> · CSV stays in this browser.
           </p>
           {csvErrors.map((e) => (
             <div className="error" key={e}>{e}</div>
@@ -315,7 +313,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
         </section>
 
         <section>
-          <h2>2 · Fleet & costs</h2>
+          <h2>Vehicle & shift</h2>
           <div className="grid-2">
             <NumberField label="Van capacity (boxes)" value={params.capacity} min={1} onChange={(v) => set("capacity", v)} />
             <NumberField label="Shift length (h)" value={params.shiftHours} min={1} step={0.5} onChange={(v) => set("shiftHours", v)} />
@@ -327,7 +325,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
         </section>
 
         <section>
-          <h2>3 · Travel speed</h2>
+          <h2>Travel estimates</h2>
           <Segmented
             label="Speed source"
             value={params.speedMode}
@@ -349,19 +347,26 @@ export function Optimizer({ dark }: { dark: boolean }) {
           </div>
           {!hasModel && (
             <p className="small" style={{ marginTop: 6 }}>
-              The location- and hour-aware speed model switches on once enough live Olho Vivo GPS data has been collected. See the Model tab.
+              GPS model unavailable. Using the average speed above.
             </p>
           )}
         </section>
 
-        <button className="primary" onClick={run} disabled={busy || !points.length || !depot}>
-          {busy ? "Optimizing…" : `Optimize ${points.length} stops`}
-        </button>
-        {solverError && <p className="error" role="alert">The solver couldn’t finish. Try again or reload the page.</p>}
-
+        <details className="stop-editor">
+          <summary>Stop manifest <span>{points.length}</span></summary>
+          <ol>{points.map((point, i) => <li key={i}><span title={point.name}>{point.name}</span><input aria-label={`Boxes for ${point.name}`} type="number" min="1" value={point.demand} onChange={(e) => { const demand = Number(e.target.value); if (Number.isFinite(demand) && demand > 0) changeStops(points.map((p, j) => j === i ? { ...p, demand } : p)); }} /><button className="text-button" aria-label={`Remove ${point.name}`} onClick={() => changeStops(points.filter((_, j) => j !== i))}>×</button></li>)}</ol>
+        </details>
+      </aside>
+      <div className="map">
+        <MapView dark={dark} onReady={setMap} />
+        <div className="map-toolbar"><span className="map-title">SP / ABC <small>Delivery map</small></span><Segmented label="Map click action" value={mode} onChange={(m) => setMode(mode === m ? "none" : m)} options={[{ value: "add", label: "Add stop" }, { value: "depot", label: "Move depot" }]} /></div>
+        <div className="map-footnote">{mode === "add" ? "Click the map to place a delivery stop" : mode === "depot" ? "Click the map to set the depot" : "● Delivery stop   ◉ Depot   ─ Estimated route"}</div>
+      </div>
+      <aside className="results-panel" aria-label="Route results">
+        <div className="section-bar"><h2>Dispatch plan</h2><span>{busy ? "Calculating" : best ? "Calculated" : "Not calculated"}</span></div>
         {best && naive && (
           <section aria-live="polite">
-            <h2>Plan</h2>
+
             <div className="tiles">
               <Tile value={best.routes.length} label="Vans needed" delta={`vs ${naive.routes.length} nearest-neighbor`} />
               <Tile value={`${fmt.int(best.km)} km`} label="Total distance" delta={savings(naive.km, best.km, "km")} />
@@ -395,7 +400,10 @@ export function Optimizer({ dark }: { dark: boolean }) {
                             className="swatch line"
                             style={{ background: st.dashed ? `repeating-linear-gradient(90deg, ${st.color} 0 5px, transparent 5px 8px)` : st.color }}
                           />
-                          {ri + 1}
+                          <button className="route-select" aria-pressed={selectedRoute === ri} aria-label={`Inspect route ${ri + 1}`} onClick={() => {
+                            setSelectedRoute(selectedRoute === ri ? null : ri);
+                            if (map) framePoints(map, depot!, r.stops.map((i) => points[i]));
+                          }}>{ri + 1}</button>
                         </span>
                       </td>
                       <td className="num">{r.stops.length}</td>
@@ -408,19 +416,18 @@ export function Optimizer({ dark }: { dark: boolean }) {
                 })}
               </tbody>
             </table>
+            {selectedRoute !== null && best.routes[selectedRoute] && <div className="route-sequence"><div className="section-bar"><h3>Route {selectedRoute + 1} / stop order</h3><button className="text-button" onClick={() => { setSelectedRoute(null); if (map && depot) framePoints(map, depot, points); }}>All routes</button></div><ol>{best.routes[selectedRoute].stops.map((i) => <li key={i}><span>{points[i].name}</span><small>{points[i].demand} boxes</small></li>)}</ol></div>}
             <div className="row" style={{ marginTop: 10, justifyContent: "space-between" }}>
               <span className="small">Solved in {fmt.int(result!.ms)} ms in your browser.</span>
               <button className="secondary" onClick={exportCsv}>Export CSV</button>
             </div>
-            <p className="small" style={{ marginTop: 8 }}>
-              Lines are straight segments between stops; distances use straight-line km × detour factor. Baseline = nearest-neighbor dispatch (always drive to the closest stop that still fits).
-            </p>
+            <details className="planning-notes"><summary>Comparison baseline</summary><p className="small">Nearest-neighbor dispatch: visit the closest remaining stop that fits capacity and shift, then return to the depot. Both plans use the same travel estimates.</p></details>
           </section>
         )}
+
+        {!best && <div className="plan-empty"><div className="empty-hex" aria-hidden="true">{points.length}</div><h3>{points.length ? "Stops ready for assignment" : "No delivery stops"}</h3><p>{points.length ? `${fmt.int(totalDemand)} boxes · ${params.capacity} boxes per van` : "Import a CSV or add stops on the map."}</p>{points.length > 0 && <div className="capacity-bound"><strong>{Math.ceil(totalDemand / params.capacity)}</strong><span>minimum vans by capacity<br /><small>Before shift constraints</small></span></div>}</div>}
+        <details className="planning-notes"><summary>Distance & cost assumptions</summary><p className="small">Straight-line km × {params.circuity} detour factor. Average speed {params.constantKmh} km/h{params.speedMode === "model" ? " (fallback; GPS proxy selected)" : ""}. No road routing or delivery time windows. Costs are estimates.</p></details>
       </aside>
-      <div className="map">
-        <MapView dark={dark} onReady={setMap} />
-      </div>
     </div>
   );
 }
