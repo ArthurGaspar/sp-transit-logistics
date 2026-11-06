@@ -1,23 +1,59 @@
 # SP Transit Logistics
 
-An independent project by [Arthur Gaspar](https://github.com/ArthurGaspar): a São Paulo transit atlas and a delivery route planner that runs in the browser.
+A browser-based workspace for delivery planning and transit coverage in São Paulo and the Grande ABC. Select a workload, configure vehicles and shifts, calculate routes, and inspect the stop sequence for each van.
 
 [Open the project](https://arthurgaspar.github.io/sp-transit-logistics/) · [Engineering decisions](#engineering-decisions) · [Routing benchmark](docs/benchmark.md)
 
 ![Operations desk](docs/overview.png)
 
-## Why this project
+## Workspace
 
-I’m a full-stack developer based in São Caetano do Sul. At Shippify I worked on logistics dashboards and routing systems; at UFABC I worked on Python data pipelines and scientific dashboards. This project brings those areas together around São Paulo and the Grande ABC, using public data and synthetic delivery scenarios. It is independent of my employers and uses no client data.
+The app opens on **Operations**, with the dataset date, network counts, delivery workloads, low-service border areas, and saved work. The figures describe the loaded snapshot; they are not live dispatch or traffic data.
 
-Two tools answer different questions:
+| Workspace | Available actions |
+|---|---|
+| **Operations** | Select a sample workload, inspect its geographic footprint and demand, open it in the planner, resume a saved draft, or jump to a low-service map cell. |
+| **Route optimizer** | Import or place stops, change demand, configure capacity and shift length, calculate a plan, inspect each route, and export its stop sequence. |
+| **Transit atlas** | Switch coverage layers, focus on the ABC border, select a cell, and draw the bus routes serving it. |
+| **Data & methods** | Check the dataset timestamp, GPS model availability, validation scores, sources, and measurement assumptions. |
 
-- **Transit atlas:** inspect scheduled peak-hour service, straight-line distance to stops, and the bus routes serving each area. A border filter focuses on the São Paulo side of the ABC.
-- **Delivery planner:** select a demo or import delivery points, set capacity and shift constraints, compare with nearest-neighbor dispatch, and export a route sequence. Input files stay in the browser. Save a draft on the device to resume the stops and fleet settings later; results are recalculated. The stop manifest supports demand edits and removals, and selecting a calculated route shows its stop order and highlights it on the map.
+The tilted workload preview plots the selected workload’s actual stop locations and depot. Its polygon is the convex hull of the delivery stops, not a calculated route or a service-coverage boundary. The minimum van count shown there assumes 30 boxes per van and considers capacity only.
 
-The **Operations** desk shows workload footprints, network counts, low-service border areas, and a saved draft. Workloads open directly in the planner; border areas open at their selected map cell. **Data & methods** contains dataset and model diagnostics.
+### Plan a workload
+
+1. In **Operations**, select a workload and choose **Plan selected workload**. Use **New plan / import CSV** to start with an empty stop list and the São Caetano depot.
+2. In **Route optimizer**, upload a CSV or use **Add stop** on the map. Use **Move depot** to change the departure point. Expand **Stop manifest** to edit demand or remove stops.
+3. Set vehicle capacity, shift length, service time, costs, and travel estimates. Choose **Calculate … stops**.
+4. Read the **Dispatch plan** beside the map: van count, distance, total van time, estimated cost, and a comparison with nearest-neighbor dispatch. Select a route number to highlight it and view its stop order; **All routes** restores the full plan.
+5. Choose **Export CSV** to download the assigned stop sequences, or **Save draft** to retain the inputs on this device.
+
+Changing the workload or planning inputs clears the previous result. Stops that cannot be served within the capacity or shift constraints are reported separately.
+
+![Route optimizer with settings, map, and dispatch results](docs/optimizer.png)
+
+### Import and saved work
+
+CSV input accepts latitude and longitude, with optional demand and name columns:
+
+```csv
+lat,lon,demand,name
+-23.6229,-46.5548,3,Delivery A
+-23.6100,-46.5700,2,Delivery B
+```
+
+Headers are optional when columns follow that order. Semicolon-separated files can use decimal commas. Demand defaults to one box when omitted. The planner uses up to **250 stops**.
+
+Files are processed in the browser. **Save draft** stores one draft in browser storage: stops, depot, workload, and fleet settings. Saving again replaces it. Return to **Operations → Saved work** to resume or delete it. Drafts belong to the current browser and site address; they do not sync between devices. Resuming restores the inputs and requires a new calculation.
+
+### Inspect network coverage
+
+The atlas provides access level, scheduled buses per hour, and straight-line distance to a stop. The bus-speed layer is available only when a GPS model has been trained. Select an area to inspect its nearby routes, or open an entry in the Operations border-area table to select and center that cell directly.
 
 ![Transit atlas](docs/insights.png)
+
+## Project context
+
+I’m [Arthur Gaspar](https://github.com/ArthurGaspar), a full-stack developer based in São Caetano do Sul. At Shippify I worked on logistics dashboards and routing systems; at UFABC I worked on Python data pipelines and scientific dashboards. This independent project combines those areas using public transit data and synthetic delivery workloads. It uses no employer or client data.
 
 ## Engineering decisions
 
@@ -26,11 +62,12 @@ The **Operations** desk shows workload footprints, network counts, low-service b
 | Python pipeline → static JSON | Network analysis and model training happen at build time. Pages can serve the result without an application server, at the cost of snapshot rather than live data. |
 | React + TypeScript | Shared data and worker contracts make the pipeline outputs and solver messages explicit. Data-load failures have a retry path. |
 | Solver in a Web Worker | Local search leaves the interface responsive. Request IDs prevent an old job from replacing results after the inputs change. |
+| Device-local drafts | Stops and settings can be resumed without an account or application server. Drafts are explicitly saved, validated on recovery, and limited to one per browser and site address. |
 | Lazy-loaded workspaces | The operations desk does not load the mapping engine or routing worker. Route shapes are requested only after an area is selected. |
 | Explicit comparison baseline | Nearest-neighbor dispatch is also a solver starting point. Tests check feasibility and that the driving-time objective does not regress against that baseline. |
 | GitHub Actions + Pages | Tests and builds run before deployment; scheduled jobs refresh the feed and collect optional GPS aggregates. Reproduction needs no paid service. |
 
-The frontend is a static application, not a demonstration of backend API or database design. The full-stack work here is the data-to-interface workflow, background computation, typed integration, and automated delivery.
+The Python pipeline prepares the network data and model outputs. The React application reads those snapshots and performs delivery planning locally. GitHub Actions runs the checks, rebuilds the data, and deploys the static application.
 
 ```mermaid
 flowchart LR
@@ -59,8 +96,6 @@ The capacitated vehicle-routing solver uses Clarke–Wright savings with four ro
 Distances use straight-line kilometers multiplied by an editable detour factor. Travel times use either a constant speed or a spatial bus-speed estimate, sampled at each leg’s endpoints and midpoint. There is no road-network routing, turn restriction model, or delivery time window. A shorter estimated route is not evidence of realized operational savings.
 
 Run `npm run benchmark` in `web` after building the data. The [recorded benchmark](docs/benchmark.md) includes the assumptions, baseline, results, and validation checks.
-
-![Delivery planner](docs/optimizer.png)
 
 ### Scheduled speed versus observed speed
 
