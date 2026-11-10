@@ -19,12 +19,15 @@ IBGE_MESH_URL = (
 )
 
 SAO_PAULO = {"code": "3550308", "name": "São Paulo"}
-# Grande ABC: the seven municipalities of the Consórcio Intermunicipal do Grande ABC.
-ABC_MUNICIPALITIES = [
+# ABCD delivery focus; the wider Grande ABC atlas also includes the other three cities.
+ABCD_MUNICIPALITIES = [
     {"code": "3547809", "name": "Santo André"},
     {"code": "3548708", "name": "São Bernardo do Campo"},
     {"code": "3548807", "name": "São Caetano do Sul"},
     {"code": "3513801", "name": "Diadema"},
+]
+ABC_MUNICIPALITIES = [
+    *ABCD_MUNICIPALITIES,
     {"code": "3529401", "name": "Mauá"},
     {"code": "3543303", "name": "Ribeirão Pires"},
     {"code": "3544103", "name": "Rio Grande da Serra"},

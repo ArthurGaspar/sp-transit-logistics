@@ -29,6 +29,7 @@ export function Insights({ dark }: { dark: boolean }) {
   const [metric, setMetric] = useState<Metric>("access");
   const [hour, setHour] = useState(8);
   const [borderOnly, setBorderOnly] = useState(() => workspaceQuery().has("border"));
+  const [focus, setFocus] = useState("all");
   const [selected, setSelected] = useState<number | null>(null);
   const [cellRoutes, setCellRoutes] = useState<Record<string, number[]> | null>(null);
   const [routes, setRoutes] = useState<Routes | null>(null);
@@ -78,6 +79,20 @@ export function Insights({ dark }: { dark: boolean }) {
   }, [cells, metric, hour]);
 
   const isBorder = (i: number) => cells!.muni[i] === 0 && cells!.abcKm[i] <= meta!.thresholds.abcBorderKm;
+  const inFocus = (i: number) => {
+    const code = meta!.municipalities[cells!.muni[i]].code;
+    return focus === "all" || (focus === "abcd" ? meta!.abcdMunicipalityCodes?.includes(code) : code === focus);
+  };
+
+  useEffect(() => {
+    if (!map || !cells || !meta || (!borderOnly && focus === "all")) return;
+    if (borderOnly && workspaceQuery().has("cell")) return;
+    const locations = cells.cell.flatMap((cell, i) => (borderOnly ? isBorder(i) : inFocus(i)) ? [cellToLatLng(cell)] : []);
+    if (!locations.length) return;
+    const lats = locations.map(([lat]) => lat);
+    const lons = locations.map(([, lon]) => lon);
+    map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 38, maxZoom: 12, duration: 0 });
+  }, [map, cells, meta, focus, borderOnly]);
 
   const color = (i: number): string => {
     if (!cells || !meta) return "transparent";
@@ -89,7 +104,7 @@ export function Insights({ dark }: { dark: boolean }) {
   // Hexagons and municipal boundaries.
   useEffect(() => {
     if (!map || !cells || !meta) return;
-    setGeoJson(map, "hex", cellFeatures(cells, (i) => ({ color: color(i), dim: borderOnly && !isBorder(i) })));
+    setGeoJson(map, "hex", cellFeatures(cells, (i) => ({ color: color(i), dim: borderOnly ? !isBorder(i) : !inFocus(i) })));
     if (!map.getLayer("hex")) {
       map.addLayer({
         id: "hex",
@@ -117,27 +132,36 @@ export function Insights({ dark }: { dark: boolean }) {
         }
       });
     }
-  }, [map, cells, meta, metric, hour, borderOnly]);
+  }, [map, cells, meta, metric, hour, borderOnly, focus]);
 
   useEffect(() => {
     if (!map) return;
     let cancelled = false;
     load<GeoJSON.FeatureCollection>("boundaries.json").then((b) => {
       if (cancelled) return;
-      setGeoJson(map, "muni", b);
-      map.addLayer({
-        id: "muni",
-        type: "line",
-        source: "muni",
-        paint: {
-          "line-color": dark ? "#c3c2b7" : "#52514e",
-          "line-width": ["case", ["get", "abc"], 1, 1.6],
-          "line-dasharray": ["case", ["get", "abc"], ["literal", [3, 2]], ["literal", [1, 0]]],
-        },
-      });
+      const codes = focus === "all" ? [] : focus === "abcd" ? meta?.abcdMunicipalityCodes ?? [] : [focus];
+      const highlighted: maplibregl.ExpressionSpecification = ["in", ["get", "code"], ["literal", codes]];
+      const lineColor: maplibregl.ExpressionSpecification = ["case", highlighted, dark ? "#f29772" : "#ad3c1b", dark ? "#c3c2b7" : "#52514e"];
+      const lineWidth: maplibregl.ExpressionSpecification = ["case", highlighted, 2.5, ["get", "abc"], 1, 1.6];
+      if (map.getLayer("muni")) {
+        map.setPaintProperty("muni", "line-color", lineColor);
+        map.setPaintProperty("muni", "line-width", lineWidth);
+      } else {
+        setGeoJson(map, "muni", b);
+        map.addLayer({
+          id: "muni",
+          type: "line",
+          source: "muni",
+          paint: {
+            "line-color": lineColor,
+            "line-width": lineWidth,
+            "line-dasharray": ["case", ["get", "abc"], ["literal", [3, 2]], ["literal", [1, 0]]],
+          },
+        });
+      }
     }).catch(() => { /* The access grid remains usable without boundary lines. */ });
     return () => { cancelled = true; };
-  }, [map, dark]);
+  }, [map, dark, focus, meta?.abcdMunicipalityCodes]);
 
   useEffect(() => {
     if (map?.getLayer("hex-selected")) map.setFilter("hex-selected", ["==", ["get", "i"], selected ?? -1]);
@@ -218,7 +242,7 @@ export function Insights({ dark }: { dark: boolean }) {
             <Tile value={fmt.int(k.stops)} label="Stops" />
             <Tile value={fmt.int(k.busRoutes)} label="Bus routes" delta={`+ ${k.railRoutes} metro/rail lines`} />
             <Tile value={fmt.pct(k.spLowShare)} label="All SP cells with low access" delta={`${fmt.pct(k.spRemoteShare)} separately classed as remote`} />
-            <Tile value={fmt.pct(k.borderLowShare)} label="Low access on ABC border" delta={`${k.borderCells} hexagons within ${meta.thresholds.abcBorderKm} km`} />
+            <Tile value={fmt.pct(k.borderLowShare)} label="Low access near the Grande ABC border" delta={`${k.borderCells} São Paulo hexagons within ${meta.thresholds.abcBorderKm} km`} />
           </div>
         </section>
 
@@ -240,9 +264,16 @@ export function Insights({ dark }: { dark: boolean }) {
               <Slider label="Hour of day" value={hour} min={0} max={23} step={1} format={(h) => `${h}:00`} onChange={setHour} />
             </div>
           )}
+          <div className="field" style={{ marginTop: 10 }}><label htmlFor="atlas-focus">Map focus</label>
+            <select id="atlas-focus" value={focus} onChange={(e) => { setFocus(e.target.value); setBorderOnly(false); setSelected(null); setRoute(null); }}>
+              <option value="all">Whole study area</option>
+              {meta.abcdMunicipalityCodes && <option value="abcd">ABCD · four municipalities</option>}
+              {meta.municipalities.map((city) => <option key={city.code} value={city.code}>{city.name}</option>)}
+            </select>
+          </div>
           <label className="row small" style={{ marginTop: 10 }}>
-            <input type="checkbox" checked={borderOnly} onChange={(e) => setBorderOnly(e.target.checked)} />
-            Focus on the São Paulo side of the ABC border
+            <input type="checkbox" checked={borderOnly} onChange={(e) => { setBorderOnly(e.target.checked); setFocus("all"); }} />
+            Focus on the São Paulo side of the Grande ABC border
           </label>
         </section>
 
@@ -308,7 +339,7 @@ export function Insights({ dark }: { dark: boolean }) {
               </>
             ) : (
               <p className="small">
-                The selected SPTrans feed does not cover ABC municipal services or the complete intermunicipal network. Access is not scored here.
+                The SPTrans feed does not represent local or full intermunicipal service here. The atlas shows the municipality, but does not score its transit access.
               </p>
             )}
           </section>
@@ -316,8 +347,8 @@ export function Insights({ dark }: { dark: boolean }) {
         {routeError && <p className="error" role="alert">Route shapes couldn’t be loaded. <button className="secondary" onClick={() => setRouteError(false)}>Retry routes</button></p>}
 
         <section>
-          <h2>Low-service areas along the ABC border</h2>
-          <p className="small">Low-access São Paulo hexagons within {meta.thresholds.abcBorderKm} km of the ABC, fewest buses first.</p>
+          <h2>Low-service areas near the Grande ABC border</h2>
+          <p className="small">Low-access hexagons on the São Paulo side, within {meta.thresholds.abcBorderKm} km of the Grande ABC, fewest buses first.</p>
           <table>
             <thead>
               <tr>
@@ -344,7 +375,7 @@ export function Insights({ dark }: { dark: boolean }) {
       </aside>
       <div className="map">
         <MapView dark={dark} onReady={setMap} />
-        <div className="map-toolbar"><span className="map-title">SP / ABC <small>{METRIC_INFO[metric].label}</small></span><span className="map-period">{metric === "speed" ? `Weekday · ${hour}:00` : "Weekday · 07:00–08:00"}</span></div>
+        <div className="map-toolbar"><span className="map-title">São Paulo / Grande ABC <small>{METRIC_INFO[metric].label}</small></span><span className="map-period">{metric === "speed" ? `Weekday · ${hour}:00` : "Weekday · 07:00–08:00"}</span></div>
       </div>
     </div>
   );

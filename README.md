@@ -1,6 +1,6 @@
 # SP Transit Logistics
 
-A browser-based workspace for delivery planning and transit coverage in São Paulo and the Grande ABC. Select a workload, configure vehicles and shifts, calculate routes, and inspect the stop sequence for each van.
+A browser-based workspace for delivery planning in São Paulo and the ABCD: Santo André, São Bernardo do Campo, São Caetano do Sul and Diadema. The atlas and census summaries cover the wider Grande ABC, which also includes Mauá, Ribeirão Pires and Rio Grande da Serra.
 
 [Open the project](https://arthurgaspar.github.io/sp-transit-logistics/) · [Engineering decisions](#engineering-decisions) · [Routing benchmark](docs/benchmark.md)
 
@@ -14,7 +14,7 @@ The app opens on **Operations**, with the dataset date, network counts, delivery
 |---|---|
 | **Operations** | Select a sample workload, inspect its geographic footprint and demand, open it in the planner, resume a saved draft, or jump to a low-service map cell. |
 | **Route optimizer** | Import or place stops, change demand, configure capacity and shift length, calculate a plan, inspect each route, and export its stop sequence. |
-| **Transit atlas** | Switch coverage layers, focus on the ABC border, select a cell, and draw the bus routes serving it. |
+| **Transit atlas** | Switch coverage layers, focus on the ABCD, any municipality or the São Paulo side of the Grande ABC border, and draw bus routes for a selected São Paulo cell. |
 | **Data & methods** | Check the dataset timestamp, GPS model availability, validation scores, sources, and measurement assumptions. |
 | **Dispatch simulation** | Replay deliveries, delays, traffic changes and vehicle outages; compare fixed optimized routes, nearest-neighbor dispatch and partial reoptimization. |
 
@@ -22,7 +22,7 @@ The tilted workload preview plots the selected workload’s actual stop location
 
 ### Plan a workload
 
-1. In **Operations**, select a workload and choose **Plan selected workload**. Use **New plan / import CSV** to start with an empty stop list and the São Caetano depot.
+1. In **Operations**, select a workload and choose **Plan selected workload**. Use **New plan / import CSV** to start with an empty stop list and a movable depot in São Bernardo do Campo.
 2. In **Route optimizer**, upload a CSV or use **Add stop** on the map. Use **Move depot** to change the departure point. Expand **Stop manifest** to edit demand or remove stops.
 3. Set vehicle capacity, shift length, service time, costs, and travel estimates. Choose **Calculate … stops**.
 4. Read the **Dispatch plan** beside the map: van count, distance, total van time, estimated cost, and a comparison with nearest-neighbor dispatch. Select a route number to highlight it and view its stop order; **All routes** restores the full plan.
@@ -32,7 +32,7 @@ Changing the workload or planning inputs clears the previous result. Stops that 
 
 ![Route optimizer with settings, calculated delivery routes, and dispatch results](docs/route-planner.png)
 
-[Local route example: UFABC São Bernardo → Rudge Ramos → São Caetano station → Santo André station → UFABC](docs/ufabc-abc-route.md), with a screenshot, inputs, and location sources.
+The default **ABCD: four-city delivery loop** has eight stops in each ABCD municipality and a depot in Rudge Ramos, São Bernardo do Campo. **São Paulo ↔ ABCD** has six stops in each ABCD municipality plus eight on the São Paulo side near the ABCD border, with a depot in Diadema. The samples show stop counts by municipality. Locations in the ABCD are synthetic points near neighborhood anchors, checked against IBGE municipal boundaries. Both scenarios keep all their municipalities in the first 24 stops used by the simulator.
 
 ### Import and saved work
 
@@ -50,9 +50,9 @@ Files are processed in the browser. **Save draft** stores one draft in browser s
 
 ### Inspect network coverage
 
-The atlas provides access level, scheduled buses per hour, and straight-line distance to a stop. The bus-speed layer is available only when a GPS model has been trained. Select an area to inspect its nearby routes, or open an entry in the Operations border-area table to select and center that cell directly.
+The atlas provides access level, scheduled buses per hour, and straight-line distance to a stop for São Paulo. **Map focus** frames the ABCD or any individual municipality. For Grande ABC cities the atlas shows geographic boundaries, while the SPTrans feed does not support local transit access scores. The bus-speed layer is available only when a GPS model has been trained. Select a São Paulo cell to inspect nearby routes, or open an entry in the Operations border-area table to center that cell directly.
 
-![Transit atlas with access-level polygons and the ABC border filter](docs/transit-atlas.png)
+![Transit atlas with the ABCD map focus and municipal boundaries](docs/transit-atlas.png)
 
 ## Project context
 
@@ -94,7 +94,7 @@ The supplied feed is not a complete picture of ABC municipal and intermunicipal 
 
 ### Population context
 
-**Data & methods** lists resident population for São Paulo and all seven Grande ABC municipalities, with study-area and ABC totals. These are **Censo 2022 municipal counts**, not current population estimates. The source is [IBGE SIDRA table 4714, variable 93](https://sidra.ibge.gov.br/tabela/4714).
+**Data & methods** lists resident population for São Paulo and all seven Grande ABC municipalities, with separate totals for the ABCD, Grande ABC and full study area. These are **Censo 2022 municipal counts**, not current population estimates. The source is [IBGE SIDRA table 4714, variable 93](https://sidra.ibge.gov.br/tabela/4714).
 
 The raw API response is vendored in `pipeline/data/population-2022.json` (retrieved 2026-11-10), so builds do not depend on another live service. `pipeline/population.py` validates the municipality codes, reference year, variable and counts before adding the summary to `meta.json`. To update the snapshot, download `population.SOURCE_URL` into that file, update `retrievedAt` in the loader, and run the pipeline tests and data build. `--refresh` refreshes GTFS only.
 

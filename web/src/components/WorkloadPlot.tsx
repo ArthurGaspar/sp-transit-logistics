@@ -21,7 +21,7 @@ export function WorkloadPlot({ scenario }: { scenario: Scenario }) {
   };
   const hull = [...half(sorted), ...half([...sorted].reverse())];
   return <div className="route-print" role="img" aria-label={`${scenario.name}: ${scenario.points.length} delivery locations and depot. Polygon outlines the locations; it is not a route.`}>
-    <div className="print-heading"><span>SP / ABC</span><span>WORKLOAD FOOTPRINT</span></div>
+    <div className="print-heading"><span>DELIVERY PLANNING</span><span>WORKLOAD FOOTPRINT</span></div>
     <svg viewBox="0 0 480 290" aria-hidden="true">
       <defs><pattern id={id} width="40" height="46" patternUnits="userSpaceOnUse"><path d="M20 0 40 11.5V34.5L20 46 0 34.5V11.5Z" fill="none" stroke="currentColor" strokeWidth=".6" /></pattern></defs>
       <rect width="480" height="290" fill={`url(#${id})`} opacity=".2" />

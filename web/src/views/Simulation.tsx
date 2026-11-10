@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NumberField, Segmented, Slider, fmt } from "../components/ui";
+import { MunicipalityBreakdown, NumberField, Segmented, Slider, fmt } from "../components/ui";
 import { load, type Scenario } from "../data";
 import { DEFAULT_SIMULATION, DEMO_WORKLOAD, POLICIES, POLICY_LABELS, simulationWorkload,
   type Policy, type SimulationComparison, type SimulationResult, type SimulationSettings } from "../lib/simulation";
@@ -91,6 +91,7 @@ export function Simulation() {
         <div className="field"><label htmlFor="sim-workload">Delivery workload</label><select id="sim-workload" value={scenarioId} onChange={(e) => {
           invalidate(); setScenarioId(e.target.value); setSettings((s) => ({ ...s, delayJob: "job-0" }));
         }}><option value="experiment">Reproducible disruption experiment · 9 orders</option>{scenarios.map((s) => <option value={s.id} key={s.id}>{s.name} · first {Math.min(s.points.length, 24)} orders</option>)}</select></div>
+        <MunicipalityBreakdown points={workload.jobs} />
         {sampleError && <p className="small">Other workloads are unavailable. The built-in experiment is ready to use.</p>}
         <div className="grid-2">
           <NumberField label="Available vans" value={settings.vehicles} min={1} onChange={(v) => { const vehicles = Math.min(8, Math.floor(v)); invalidate(); setSettings((s) => ({ ...s, vehicles, outageVehicle: Math.min(s.outageVehicle, vehicles - 1) })); }} />

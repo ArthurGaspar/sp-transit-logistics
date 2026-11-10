@@ -1,4 +1,6 @@
-# UFABC São Bernardo / ABC route example
+# Historical example: three-city route from UFABC São Bernardo
+
+This earlier route covers three municipalities. For the current four-city example, use **ABCD: four-city delivery loop** in the app; it adds Diadema and balances stops across all four cities.
 
 ![Calculated route from UFABC São Bernardo to Rudge Ramos, São Caetano station, and Santo André station](ufabc-sbc-sao-caetano.png)
 

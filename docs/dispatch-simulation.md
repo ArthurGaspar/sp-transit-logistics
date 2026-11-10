@@ -61,7 +61,7 @@ The sensitivity chart samples intensities 0, 0.25, 0.5, 0.75, 1, 1.5 and 2. Inte
 
 ## Model boundaries and verification
 
-- Coordinates, delivery demand, deadlines and events are synthetic. Other sample workloads use up to their first 24 stops with explicitly synthetic release times and deadlines. There is no traffic feed or calibration against delivery operations.
+- Coordinates, delivery demand, deadlines and events are synthetic. Other sample workloads use up to their first 24 stops with explicitly synthetic release times and deadlines. The ABCD workload interleaves the four municipalities, giving the simulator six orders in each. São Paulo ↔ ABCD includes all five municipalities in its first 24. There is no traffic feed or calibration against delivery operations.
 - Travel is straight-line distance times a detour factor. Traffic is a persistent zone multiplier applied on departure. A committed leg retains its departure estimate; a vehicle outage can pause it. No street graph, traffic rerouting or hard appointment windows are modeled.
 - Parcels remain on their loaded van. New orders wait at the depot; loading at the depot is instantaneous. There is no cross-vehicle rescue or transfer. The available fleet is fixed.
 - Policies cannot start a delivery unless its known travel, service and direct depot return fit the shift. An in-flight disruption can still create overtime. Remaining unservable orders are reported explicitly.

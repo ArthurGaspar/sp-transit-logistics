@@ -18,6 +18,19 @@ export function Tile({ value, label, delta }: { value: ReactNode; label: string;
   );
 }
 
+export function MunicipalityBreakdown({ points }: { points: { municipality?: string }[] }) {
+  const counts = new Map<string, number>();
+  for (const point of points) if (point.municipality) {
+    counts.set(point.municipality, (counts.get(point.municipality) ?? 0) + 1);
+  }
+  if (!counts.size) return null;
+  const unlabeled = points.length - [...counts.values()].reduce((sum, count) => sum + count, 0);
+  return <ul className="municipality-breakdown" aria-label="Stops by municipality">
+    {[...counts].map(([city, count]) => <li key={city}>{city} <strong>{count}</strong></li>)}
+    {unlabeled > 0 && <li>Municipality unknown <strong>{unlabeled}</strong></li>}
+  </ul>;
+}
+
 export function Segmented<T extends string>({
   options,
   value,

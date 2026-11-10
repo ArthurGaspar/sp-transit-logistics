@@ -1,7 +1,7 @@
 import type { Map as MlMap, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapView, setGeoJson } from "../components/MapView";
-import { DataState, NumberField, Segmented, Slider, Tile, fmt } from "../components/ui";
+import { DataState, MunicipalityBreakdown, NumberField, Segmented, Slider, Tile, fmt } from "../components/ui";
 import { load, type Cells, type Meta, type Scenario, type ScenarioPoint } from "../data";
 import { routeStyle } from "../lib/colors";
 import { parseDeliveryCsv } from "../lib/csv";
@@ -16,7 +16,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [cells, setCells] = useState<Cells | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [scenarioId, setScenarioId] = useState("abc-border");
+  const [scenarioId, setScenarioId] = useState("custom");
   const [depot, setDepot] = useState<{ lat: number; lon: number } | null>(null);
   const [points, setPoints] = useState<ScenarioPoint[]>([]);
   const [mode, setMode] = useState<ClickMode>("none");
@@ -41,7 +41,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
       const query = workspaceQuery();
       const draft = query.has("draft") ? readDraft() : null;
       if (draft) {
-        setScenarioId(draft.scenarioId);
+        setScenarioId(s.some((item) => item.id === draft.scenarioId) ? draft.scenarioId : "custom");
         setDepot(draft.depot);
         setPoints(draft.points);
         setParams({ ...draft.params, speedMode: c.speedWeekday ? draft.params.speedMode : "constant" });
@@ -51,7 +51,8 @@ export function Optimizer({ dark }: { dark: boolean }) {
         setDepot(s[0].depot);
         setPoints([]);
       } else {
-        applyScenario(s.find((item) => item.id === query.get("scenario")) ?? s[0]);
+        const requested = query.get("scenario");
+        applyScenario(s.find((item) => item.id === (requested === "abc-border" ? "abcd" : requested)) ?? s[0]);
       }
     }).catch(() => setDataError(true));
     worker.current = new Worker(new URL("../lib/solver.worker.ts", import.meta.url), { type: "module" });
@@ -244,6 +245,8 @@ export function Optimizer({ dark }: { dark: boolean }) {
   const best = result?.best;
   const naive = result?.naive;
   const totalDemand = points.reduce((s, p) => s + p.demand, 0);
+  const scenario = scenarios.find((item) => item.id === scenarioId);
+  const depotCity = depot?.lat === scenario?.depot.lat && depot?.lon === scenario?.depot.lon ? scenario?.depotMunicipality : undefined;
 
   function exportCsv() {
     if (!best) return;
@@ -295,8 +298,9 @@ export function Optimizer({ dark }: { dark: boolean }) {
               {scenarioId === "custom" && <option value="custom">Custom workload</option>}
             </select>
           </div>
-          <p className="small" style={{ marginTop: 6 }}>{scenarios.find((s) => s.id === scenarioId)?.description ?? "Custom delivery locations."}</p>
-          <p className="small">Depot: {depot?.lat.toFixed(4)}, {depot?.lon.toFixed(4)}</p>
+          <p className="small" style={{ marginTop: 6 }}>{scenario?.description ?? "Custom delivery locations."}</p>
+          <MunicipalityBreakdown points={points} />
+          <p className="small">Depot: {depotCity && `${depotCity} · `}{depot?.lat.toFixed(4)}, {depot?.lon.toFixed(4)}</p>
           <div className="row" style={{ marginTop: 8 }}>
             <label className="secondary" style={{ display: "inline-block" }}>
               Upload CSV
@@ -359,7 +363,7 @@ export function Optimizer({ dark }: { dark: boolean }) {
       </aside>
       <div className="map">
         <MapView dark={dark} onReady={setMap} />
-        <div className="map-toolbar"><span className="map-title">SP / ABC <small>Delivery map</small></span><Segmented label="Map click action" value={mode} onChange={(m) => setMode(mode === m ? "none" : m)} options={[{ value: "add", label: "Add stop" }, { value: "depot", label: "Move depot" }]} /></div>
+        <div className="map-toolbar"><span className="map-title">SP / ABCD <small>Delivery map</small></span><Segmented label="Map click action" value={mode} onChange={(m) => setMode(mode === m ? "none" : m)} options={[{ value: "add", label: "Add stop" }, { value: "depot", label: "Move depot" }]} /></div>
         <div className="map-footnote">{mode === "add" ? "Click the map to place a delivery stop" : mode === "depot" ? "Click the map to set the depot" : "● Delivery stop   ◉ Depot   ─ Estimated route"}</div>
       </div>
       <aside className="results-panel" aria-label="Route results">

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
+from shapely import contains_xy
 from shapely.geometry import LineString, Point, mapping, shape
 
 import fetch
@@ -18,7 +19,8 @@ import network
 import population
 import schedule_signal
 import speed_model
-from config import ABC_BORDER_KM, ABC_MUNICIPALITIES, H3_RES, OUT_DIR, RANDOM_SEED, ROOT, SAO_PAULO
+from workloads import abcd_points, interleave
+from config import ABC_BORDER_KM, ABC_MUNICIPALITIES, ABCD_MUNICIPALITIES, H3_RES, OUT_DIR, RANDOM_SEED, ROOT, SAO_PAULO
 
 ACCESS_CODES = ["no_data", "remote", "low", "fair", "good"]
 ROUTE_SIMPLIFY_DEG = 0.0003  # ~30 m
@@ -71,8 +73,10 @@ def _demo_scenarios(g, cells: pd.DataFrame, boundaries: dict) -> list[dict]:
     stops = g["stops"].copy()
     stop_cell = gtfs.stop_cells(stops, H3_RES)
     stops["cell"] = stop_cell.to_numpy()
-    stops = stops.merge(cells[["cell", "abc_km", "muni"]], on="cell")
-    stops = stops[stops["muni"] == SAO_PAULO["code"]]
+    sp_cells = cells[cells["muni"] == SAO_PAULO["code"]]
+    stops = stops[stops["cell"].isin(sp_cells["cell"])]
+    sp_polygon = shape(boundaries[SAO_PAULO["code"]]["geometry"])
+    stops = stops[contains_xy(sp_polygon, stops.stop_lon.round(5), stops.stop_lat.round(5))]
 
     def spread(cands: pd.DataFrame, n: int, min_km: float = 0.35) -> list[tuple[float, float]]:
         chosen = []
@@ -83,46 +87,60 @@ def _demo_scenarios(g, cells: pd.DataFrame, boundaries: dict) -> list[dict]:
                 break
         return chosen
 
-    def inside(code: str, n: int) -> list[tuple[float, float]]:
-        poly = shape(boundaries[code]["geometry"])
-        minx, miny, maxx, maxy = poly.bounds
-        pts = []
-        while len(pts) < n:
-            lon, lat = rng.uniform(minx, maxx), rng.uniform(miny, maxy)
-            if poly.contains(Point(lon, lat)):
-                pts.append((round(lat, 5), round(lon, 5)))
-        return pts
-
     def near(lat, lon, km):
         return stops[gtfs.haversine_km(stops["stop_lat"], stops["stop_lon"], lat, lon) <= km]
 
+    abcd_distance = network.distance_to_abc_km(sp_cells, boundaries, ABCD_MUNICIPALITIES)
+    border_stops = stops[stops["cell"].isin(sp_cells.loc[abcd_distance <= ABC_BORDER_KM, "cell"])]
+    sp_drops = [(lat, lon, SAO_PAULO["name"]) for lat, lon in spread(border_stops, 8)]
+    if len(sp_drops) != 8:
+        raise ValueError("Expected eight São Paulo stops for the cross-border sample")
+
+    def capital(points):
+        return [(lat, lon, SAO_PAULO["name"]) for lat, lon in points]
+
     scenarios = [
         {
-            "id": "abc-border",
-            "name": "ABC border: São Caetano hub",
-            "description": "A São Caetano do Sul depot serving drops on both sides of the São Paulo / ABC border.",
-            "depot": (-23.6229, -46.5548),
-            "points": spread(stops[stops["abc_km"] <= ABC_BORDER_KM], 24) + inside("3548807", 10),
+            "id": "abcd",
+            "name": "ABCD: four-city delivery loop",
+            "description": "Eight stops each in Santo André, São Bernardo do Campo, São Caetano do Sul and Diadema.",
+            "depot": (-23.65538, -46.57101),
+            "depotMunicipality": "São Bernardo do Campo",
+            "points": interleave(abcd_points(boundaries, rng, 8)),
+        },
+        {
+            "id": "abcd-sp",
+            "name": "São Paulo ↔ ABCD",
+            "description": "Six stops in each ABCD municipality plus eight in São Paulo near the ABCD border.",
+            "depot": (-23.685, -46.622),
+            "depotMunicipality": "Diadema",
+            "points": interleave([*abcd_points(boundaries, rng, 6), sp_drops]),
         },
         {
             "id": "centro",
             "name": "Centro expandido",
             "description": "Barra Funda depot, 40 drops within 5 km of Praça da Sé.",
             "depot": (-23.5254, -46.6670),
-            "points": spread(near(-23.5503, -46.6339, 5), 40),
+            "depotMunicipality": SAO_PAULO["name"],
+            "points": capital(spread(near(-23.5503, -46.6339, 5), 40)),
         },
         {
             "id": "zona-leste",
             "name": "Zona Leste: large fleet",
             "description": "Itaquera depot, 70 drops spread across the East Zone.",
             "depot": (-23.5427, -46.4710),
-            "points": spread(near(-23.5450, -46.4900, 7), 70, min_km=0.5),
+            "depotMunicipality": SAO_PAULO["name"],
+            "points": capital(spread(near(-23.5450, -46.4900, 7), 70, min_km=0.5)),
         },
     ]
     for s in scenarios:
+        lat, lon = s["depot"]
+        city = next(city for city in [SAO_PAULO, *ABC_MUNICIPALITIES] if city["name"] == s["depotMunicipality"])
+        if not shape(boundaries[city["code"]]["geometry"]).contains(Point(lon, lat)):
+            raise ValueError(f"Depot outside {city['name']} in {s['id']}")
         s["points"] = [
-            {"lat": lat, "lon": lon, "demand": int(rng.integers(1, 6)), "name": f"Drop {i + 1}"}
-            for i, (lat, lon) in enumerate(s["points"])
+            {"lat": lat, "lon": lon, "demand": int(rng.integers(1, 6)), "name": f"Drop {i + 1}", "municipality": city}
+            for i, (lat, lon, city) in enumerate(s["points"])
         ]
         s["depot"] = {"lat": s["depot"][0], "lon": s["depot"][1]}
     return scenarios
@@ -181,6 +199,7 @@ def main(refresh: bool) -> None:
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "feed": {"source": "SPTrans GTFS via Mobility Database (mdb-8)"},
         "municipalities": munis,
+        "abcdMunicipalityCodes": [m["code"] for m in ABCD_MUNICIPALITIES],
         "population": population_summary,
         "accessCodes": ACCESS_CODES,
         "thresholds": {

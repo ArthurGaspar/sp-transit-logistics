@@ -41,8 +41,8 @@ def _planar(geom):
     return transform(geom, lambda xy: xy * np.array([KM_PER_DEG_LON, KM_PER_DEG_LAT]))
 
 
-def distance_to_abc_km(cells: pd.DataFrame, boundaries: dict) -> np.ndarray:
-    abc = _planar(unary_union([shape(boundaries[m["code"]]["geometry"]) for m in ABC_MUNICIPALITIES]))
+def distance_to_abc_km(cells: pd.DataFrame, boundaries: dict, municipalities=ABC_MUNICIPALITIES) -> np.ndarray:
+    abc = _planar(unary_union([shape(boundaries[m["code"]]["geometry"]) for m in municipalities]))
     return np.array([abc.distance(_planar(Point(lon, lat))) for lat, lon in zip(cells["lat"], cells["lon"])])
 
 

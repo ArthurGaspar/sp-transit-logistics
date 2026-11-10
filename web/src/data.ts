@@ -47,6 +47,7 @@ export interface Meta {
   generatedAt: string;
   feed: { source: string };
   municipalities: { code: string; name: string }[];
+  abcdMunicipalityCodes?: string[];
   /** Optional for snapshots built before municipal census data was added. */
   population?: {
     year: number;
@@ -92,6 +93,7 @@ export interface ScenarioPoint {
   lon: number;
   demand: number;
   name: string;
+  municipality?: string;
 }
 
 export interface Scenario {
@@ -99,6 +101,7 @@ export interface Scenario {
   name: string;
   description: string;
   depot: { lat: number; lon: number };
+  depotMunicipality?: string;
   points: ScenarioPoint[];
 }
 

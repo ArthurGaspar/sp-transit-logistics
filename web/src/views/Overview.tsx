@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DataState, fmt } from "../components/ui";
+import { DataState, MunicipalityBreakdown, fmt } from "../components/ui";
 import { load, type Meta, type Scenario } from "../data";
 import { deleteDraft, readDraft } from "../lib/draft";
 import { WorkloadPlot } from "../components/WorkloadPlot";
@@ -23,14 +23,14 @@ export function Overview() {
   return <div className="page operations">
     <div className="desk">
       <header className="desk-heading">
-        <div><p className="eyebrow">SP / ABC · Operations desk</p><h1>Workloads & coverage</h1></div>
+        <div><p className="eyebrow">São Paulo / ABCD · Operations desk</p><h1>Workloads & coverage</h1></div>
         <div className="dataset-stamp"><span className="status-square" /> Dataset snapshot<strong>{new Date(meta.generatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</strong></div>
       </header>
       <div className="network-strip" aria-label="Network summary">
         <div><span>Network stops</span><strong>{fmt.int(meta.kpis.stops)}</strong></div>
         <div><span>Bus routes</span><strong>{fmt.int(meta.kpis.busRoutes)}</strong></div>
         <div><span>Low-access SP cells</span><strong>{fmt.pct(meta.kpis.spLowShare)}</strong></div>
-        <div><span>Low-access border cells</span><strong>{fmt.pct(meta.kpis.borderLowShare)}<small> / {meta.kpis.borderCells} cells</small></strong></div>
+        <div><span>Low-access SP border cells</span><strong>{fmt.pct(meta.kpis.borderLowShare)}<small> / {meta.kpis.borderCells} cells</small></strong></div>
         <a href="#insights">Network map <span aria-hidden="true">↗</span></a>
       </div>
       {meta.population && <p className="small data-note">Censo {meta.population.year}: {fmt.int(meta.population.totalResidents)} residents across São Paulo and Grande ABC · <a href="#model">Population by municipality ↗</a></p>}
@@ -48,13 +48,15 @@ export function Overview() {
         <div className="workload-preview">
           <div className="preview-coordinates">{Math.abs(scenario.depot.lat).toFixed(4)} S / {Math.abs(scenario.depot.lon).toFixed(4)} W <span>DEPOT</span></div>
           <WorkloadPlot scenario={scenario} />
+          <MunicipalityBreakdown points={scenario.points} />
+          {scenario.depotMunicipality && <p className="small">Depot: {scenario.depotMunicipality}</p>}
           <div className="preview-facts"><div><strong>{scenario.points.length}</strong><span>delivery stops</span></div><div><strong>{demand}</strong><span>boxes to assign</span></div><div><strong>{Math.ceil(demand / 30)}<small> min.</small></strong><span>vans at 30 boxes*</span></div></div>
           <p className="small">*Capacity lower bound. Shift constraints may require more vans.</p>
         </div>
       </section>
       <div className="desk-lower">
         <section className="coverage-queue">
-          <div className="section-bar"><h2>ABC border / low-service areas</h2><a href="#insights?border=1" className="text-link">Inspect on map ↗</a></div>
+          <div className="section-bar"><h2>São Paulo side / Grande ABC border</h2><a href="#insights?border=1" className="text-link">Inspect on map ↗</a></div>
           <table><thead><tr><th>Nearest stop</th><th className="num">Buses/h</th><th className="num">Distance</th><th><span className="sr-only">Action</span></th></tr></thead><tbody>
             {meta.abcBorderGaps.slice(0, 4).map((g) => <tr key={g.cell}><td><a href={`#insights?cell=${g.cell}&border=1`}>{g.nearestStop}</a></td><td className="num">{fmt.dec(g.busesPeak)}</td><td className="num">{fmt.int(g.nearestStopM)} m</td><td aria-hidden="true">↗</td></tr>)}
           </tbody></table>

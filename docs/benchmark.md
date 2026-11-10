@@ -10,18 +10,19 @@ The command loads the same TypeScript solver and travel model used by the worker
 
 ## Recorded run
 
-Recorded on 6 November 2026 using the local dataset built on **15 October 2026 at 17:01:08 UTC**. New feed builds may change the scenarios and results; the command prints the dataset timestamp.
+Recorded using the local dataset built on **10 November 2026 at 20:55:20 UTC**. New feed builds may change the scenarios and results; the command prints the dataset timestamp.
 
 Assumptions: capacity **30 boxes**, shift **8 hours**, service **5 minutes per stop**, speed **20 km/h**, detour factor **1.3**. The delivery locations are sampled from public geography; their demand is synthetic.
 
 | Scenario | Stops | Vans: baseline → solver | Baseline km | Solver km | Distance reduction |
 |---|---:|---:|---:|---:|---:|
-| ABC border: São Caetano hub | 34 | 4 → 4 | 215.4 | 152.0 | 29.4% |
-| Centro expandido | 40 | 4 → 4 | 113.7 | 101.4 | 10.8% |
-| Zona Leste: large fleet | 70 | 8 → 8 | 210.9 | 171.1 | 18.9% |
+| ABCD: four-city delivery loop | 32 | 3 → 3 | 80.2 | 77.8 | 3.0% |
+| São Paulo ↔ ABCD | 32 | 4 → 4 | 182.7 | 132.0 | 27.7% |
+| Centro expandido | 40 | 5 → 5 | 135.8 | 102.7 | 24.4% |
+| Zona Leste: large fleet | 70 | 7 → 7 | 226.1 | 164.2 | 27.4% |
 
 The baseline always visits the nearest unvisited stop that fits the current van and shift, returning to the depot when no further stop fits. The solver minimizes driving minutes. At constant speed, reducing driving minutes also reduces estimated distance. With spatially varying speed, that equivalence does not hold.
 
-Local solve times were 10–46 ms for this run, excluding data loading, worker startup, and rendering. These timings depend on hardware and search budget; they are not a performance guarantee.
+Local solve times were 10–40 ms for this run, excluding data loading, worker startup, and rendering. These timings depend on hardware and search budget; they are not a performance guarantee.
 
-These three cases are a small demo benchmark, not an independent generalization study or evidence of client savings. Neither plan uses real road distances. Fleet sizes happen to match here; fleet minimization is not the objective.
+These four cases are a small demo benchmark, not an independent generalization study or evidence of client savings. Neither plan uses real road distances. Fleet sizes happen to match here; fleet minimization is not the objective.

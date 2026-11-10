@@ -10,6 +10,7 @@ export const POLICY_LABELS: Record<Policy, string> = {
 };
 export interface DeliveryJob extends LatLon {
   id: string; name: string; demand: number; releaseAt: number; dueAt: number;
+  municipality?: string;
 }
 export interface SimulationWorkload { name: string; depot: LatLon; jobs: DeliveryJob[] }
 export interface SimulationSettings {

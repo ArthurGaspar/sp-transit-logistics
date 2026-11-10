@@ -31,6 +31,7 @@ export function Model() {
 
   const s = meta.scheduleSignal;
   const m = meta.speedModel;
+  const abcdResidents = meta.population?.municipalities.filter((city) => meta.abcdMunicipalityCodes?.includes(city.code)).reduce((sum, city) => sum + city.residents, 0);
 
   return (
     <div className="page">
@@ -110,6 +111,7 @@ export function Model() {
             <div className="tiles" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
               <Tile value={fmt.int(meta.population.totalResidents)} label="São Paulo + Grande ABC residents" delta={`Census reference year: ${meta.population.year}`} />
               <Tile value={fmt.int(meta.population.abcResidents)} label="Grande ABC residents" delta="Seven municipalities" />
+              {abcdResidents ? <Tile value={fmt.int(abcdResidents)} label="ABCD residents" delta="Santo André, São Bernardo, São Caetano and Diadema" /> : null}
             </div>
             <table>
               <thead><tr><th scope="col">Municipality</th><th scope="col" className="num">Residents</th></tr></thead>
@@ -134,7 +136,7 @@ export function Model() {
             <li>
               <b>Remote:</b> cells over {fmt.int(meta.thresholds.remoteStopM)} m from any stop, without nearby rail, are kept out of the gap ranking. Their population is unknown: remoteness does not establish that nobody lives there. Headline shares use all São Paulo cells as the denominator, including remote cells.
             </li>
-            <li><b>ABC:</b> this feed does not represent the full ABC municipal or intermunicipal network. Access is scored on the São Paulo side only.</li>
+            <li><b>Regional scope:</b> the delivery samples focus on Santo André, São Bernardo do Campo, São Caetano do Sul and Diadema (ABCD). The atlas and census totals also include Mauá, Ribeirão Pires and Rio Grande da Serra. SPTrans access is scored on the São Paulo side only.</li>
             <li>
               <b>Routing:</b> capacitated VRP with a shift limit, solved in a Web Worker with Clarke-Wright savings, then 2-opt, relocate and swap
               local search. Distance = straight line × detour factor (default 1.3). Costs per km and per hour are editable assumptions, not quotes.
