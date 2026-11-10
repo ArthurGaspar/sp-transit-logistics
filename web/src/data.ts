@@ -47,6 +47,17 @@ export interface Meta {
   generatedAt: string;
   feed: { source: string };
   municipalities: { code: string; name: string }[];
+  /** Optional for snapshots built before municipal census data was added. */
+  population?: {
+    year: number;
+    source: string;
+    sourceUrl: string;
+    retrievedAt: string;
+    geography: "municipality";
+    municipalities: { code: string; name: string; residents: number }[];
+    totalResidents: number;
+    abcResidents: number;
+  };
   accessCodes: AccessCode[];
   thresholds: {
     lowBusesPerHour: number;

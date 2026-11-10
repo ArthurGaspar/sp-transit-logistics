@@ -15,6 +15,7 @@ from shapely.geometry import LineString, Point, mapping, shape
 import fetch
 import gtfs
 import network
+import population
 import schedule_signal
 import speed_model
 from config import ABC_BORDER_KM, ABC_MUNICIPALITIES, H3_RES, OUT_DIR, RANDOM_SEED, ROOT, SAO_PAULO
@@ -131,6 +132,7 @@ def main(refresh: bool) -> None:
     print("1/5 fetching inputs")
     g = gtfs.load(fetch.fetch_gtfs(force=refresh))
     boundaries = fetch.fetch_boundaries()
+    population_summary = population.load_population()
 
     print("2/5 access metrics per hexagon")
     cells = network.study_cells(boundaries)
@@ -179,6 +181,7 @@ def main(refresh: bool) -> None:
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "feed": {"source": "SPTrans GTFS via Mobility Database (mdb-8)"},
         "municipalities": munis,
+        "population": population_summary,
         "accessCodes": ACCESS_CODES,
         "thresholds": {
             "lowBusesPerHour": network.LOW_BUSES_PER_HOUR,

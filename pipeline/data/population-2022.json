@@ -1,0 +1,118 @@
+[
+  {
+    "id": "93",
+    "variavel": "População residente",
+    "unidade": "Pessoas",
+    "resultados": [
+      {
+        "classificacoes": [],
+        "series": [
+          {
+            "localidade": {
+              "id": "3550308",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "São Paulo (SP)"
+            },
+            "serie": {
+              "2022": "11451999"
+            }
+          },
+          {
+            "localidade": {
+              "id": "3547809",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "Santo André (SP)"
+            },
+            "serie": {
+              "2022": "748919"
+            }
+          },
+          {
+            "localidade": {
+              "id": "3548708",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "São Bernardo do Campo (SP)"
+            },
+            "serie": {
+              "2022": "810729"
+            }
+          },
+          {
+            "localidade": {
+              "id": "3548807",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "São Caetano do Sul (SP)"
+            },
+            "serie": {
+              "2022": "165655"
+            }
+          },
+          {
+            "localidade": {
+              "id": "3513801",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "Diadema (SP)"
+            },
+            "serie": {
+              "2022": "393237"
+            }
+          },
+          {
+            "localidade": {
+              "id": "3529401",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "Mauá (SP)"
+            },
+            "serie": {
+              "2022": "418261"
+            }
+          },
+          {
+            "localidade": {
+              "id": "3543303",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "Ribeirão Pires (SP)"
+            },
+            "serie": {
+              "2022": "115559"
+            }
+          },
+          {
+            "localidade": {
+              "id": "3544103",
+              "nivel": {
+                "id": "N6",
+                "nome": "Município"
+              },
+              "nome": "Rio Grande da Serra (SP)"
+            },
+            "serie": {
+              "2022": "44170"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

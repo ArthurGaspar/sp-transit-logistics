@@ -33,6 +33,7 @@ export function Overview() {
         <div><span>Low-access border cells</span><strong>{fmt.pct(meta.kpis.borderLowShare)}<small> / {meta.kpis.borderCells} cells</small></strong></div>
         <a href="#insights">Network map <span aria-hidden="true">↗</span></a>
       </div>
+      {meta.population && <p className="small data-note">Censo {meta.population.year}: {fmt.int(meta.population.totalResidents)} residents across São Paulo and Grande ABC · <a href="#model">Population by municipality ↗</a></p>}
       <section className="dispatch-board" aria-labelledby="workloads-heading">
         <div className="workload-list">
           <div className="section-bar"><h2 id="workloads-heading">Delivery workloads</h2><span>Sample data</span></div>
@@ -66,6 +67,7 @@ export function Overview() {
           <div className="data-availability"><span className={`status-square ${meta.speedModel.status === "trained" ? "ready" : "waiting"}`} /><div><strong>GPS speed model</strong><span>{meta.speedModel.status === "trained" ? "Available · experimental bus-speed proxy" : "No trained model · use average speed"}</span></div><a href="#model" aria-label="GPS speed model details">↗</a></div>
         </section>
       </div>
+      <section className="card"><h2>Dispatch under disruption</h2><p>Explore delivery delays, traffic changes and vehicle outages. See when an initially efficient route loses to another dispatch policy.</p><a className="text-link" href="#simulation">Open dispatch simulation ↗</a></section>
       <footer className="desk-footer"><span>SP Transit Logistics / Arthur Gaspar</span><span>SPTrans · IBGE · OpenStreetMap <a href="#model">Data & methods ↗</a></span></footer>
     </div>
   </div>;

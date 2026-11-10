@@ -16,6 +16,7 @@ The app opens on **Operations**, with the dataset date, network counts, delivery
 | **Route optimizer** | Import or place stops, change demand, configure capacity and shift length, calculate a plan, inspect each route, and export its stop sequence. |
 | **Transit atlas** | Switch coverage layers, focus on the ABC border, select a cell, and draw the bus routes serving it. |
 | **Data & methods** | Check the dataset timestamp, GPS model availability, validation scores, sources, and measurement assumptions. |
+| **Dispatch simulation** | Replay deliveries, delays, traffic changes and vehicle outages; compare fixed optimized routes, nearest-neighbor dispatch and partial reoptimization. |
 
 The tilted workload preview plots the selected workload’s actual stop locations and depot. Its polygon is the convex hull of the delivery stops, not a calculated route or a service-coverage boundary. The minimum van count shown there assumes 30 boxes per van and considers capacity only.
 
@@ -91,7 +92,23 @@ The headline percentages use **all São Paulo cells**, including cells separatel
 
 The supplied feed is not a complete picture of ABC municipal and intermunicipal transit. ABC cells remain unscored. A distance to a stop is a straight line, not a walk along streets.
 
-### Routing
+### Population context
+
+**Data & methods** lists resident population for São Paulo and all seven Grande ABC municipalities, with study-area and ABC totals. These are **Censo 2022 municipal counts**, not current population estimates. The source is [IBGE SIDRA table 4714, variable 93](https://sidra.ibge.gov.br/tabela/4714).
+
+The raw API response is vendored in `pipeline/data/population-2022.json` (retrieved 2026-11-10), so builds do not depend on another live service. `pipeline/population.py` validates the municipality codes, reference year, variable and counts before adding the summary to `meta.json`. To update the snapshot, download `population.SOURCE_URL` into that file, update `retrievedAt` in the loader, and run the pipeline tests and data build. `--refresh` refreshes GTFS only.
+
+Municipal totals are not distributed uniformly across H3 cells. Population-weighted access, residents in remote cells, and population-based gap rankings still require census-sector counts and geometries. Existing access percentages and rankings remain area-based.
+
+### Dispatch simulation
+
+Open **Dispatch simulation** for a reproducible synthetic experiment in which an initially efficient plan stops being the best after the environment changes. Adjust traffic, service delays, vehicle outages, fleet and penalty costs; compare complete runs, inspect the intensity chart, replay events and export the full experiment as JSON. Other sample workloads use up to their first 24 stops with synthetic deadlines and release times.
+
+In the built-in example, the fixed optimized plan costs **R$196.62** under calm conditions versus **R$210.62** for nearest-neighbor dispatch. Under the configured disruptions, nearest-neighbor costs **R$400.16**, the fixed optimized plan **R$470.19**, and partial reoptimization **R$402.10**. The score includes distance, driver time, lateness and unserved-order penalties; it is an editable model, not measured savings. Partial reoptimization preserves completed work, committed legs and each van's cargo.
+
+See the [experiment, event timeline, assumptions and recorded results](docs/dispatch-simulation.md). Reproduce it with `npm run benchmark:simulation` in `web/`.
+
+### Static route solver
 
 The capacitated vehicle-routing solver uses Clarke–Wright savings with four route-shape parameters, plus a nearest-neighbor start. Each candidate is improved with 2-opt, relocate, and swap moves. The objective is **driving minutes**, not minimum fleet size or minimum monetary cost. Capacity and shift length, including service time, are constraints. Unservable stops are listed explicitly.
 
@@ -131,6 +148,7 @@ python -m pytest pipeline/tests -q
 # From web/:
 npm test
 npm run benchmark
+npm run benchmark:simulation
 npm run build
 ```
 
@@ -145,12 +163,17 @@ For GPS collection, obtain an [SPTrans developer token](https://www.sptrans.com.
 ## Where I would take it next
 
 1. **A road-network distance matrix.** This would address the planner’s largest approximation before adding more optimization heuristics.
-2. **Population-weighted access.** IBGE census counts would distinguish poorly served land from poorly served residents and let the remote class be revisited.
-3. **Delivery time windows.** These would make the planner closer to dispatch constraints; they require a new feasibility model and benchmark cases.
+2. **Population-weighted access.** Add census-sector counts and geometries to the existing municipal census context to distinguish poorly served land from poorly served residents and revisit the remote class.
+3. **Hard delivery time windows.** The simulation now has soft deadline penalties. Appointment windows in the static planner would require additional feasibility constraints and benchmark cases.
 
 ## Sources
 
 - SPTrans GTFS, mirrored by [Mobility Database](https://mobilitydatabase.org), feed `mdb-8`.
 - [IBGE municipal boundaries](https://servicodados.ibge.gov.br/api/docs/malhas), vendored under `pipeline/data/boundaries`.
+- [IBGE Censo 2022 resident population](https://sidra.ibge.gov.br/tabela/4714), SIDRA table 4714, variable 93; municipal snapshot vendored under `pipeline/data/population-2022.json`.
 - SPTrans Olho Vivo API for optional GPS observations.
 - © OpenStreetMap contributors; basemap tiles by [OpenFreeMap](https://openfreemap.org).
+
+## License
+
+This project's source code is licensed under the [MIT License](LICENSE). Third-party data and assets remain subject to their respective licenses and terms.

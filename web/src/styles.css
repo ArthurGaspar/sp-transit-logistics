@@ -190,6 +190,32 @@ td.num, th.num { text-align: right; }
 .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
 .card > p:last-child { margin-bottom: 0; }
 
+.simulation .page-inner { max-width: 1240px; }
+.simulation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.simulation-heading h1 { margin: 5px 0 12px; font-size: clamp(26px, 3vw, 38px); letter-spacing: -.04em; line-height: 1.12; }
+.simulation-config { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.simulation-config .card { display: flex; flex-direction: column; gap: 14px; }
+.simulation-config .card > p { margin: 0; }
+.simulation-costs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 16px 0; }
+.simulation-rules { padding-left: 20px; color: var(--text-secondary); }
+.simulation-rules li { margin-bottom: 8px; }
+.simulation-table { overflow-x: auto; }
+.simulation-table table { min-width: 580px; }
+.simulation-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+.simulation-chart, .simulation-timeline { width: 100%; height: auto; display: block; margin: 16px 0; }
+.simulation-visual { overflow-x: auto; }
+.simulation-visual svg { min-width: 740px; }
+.simulation-chart text, .simulation-timeline text { fill: var(--text-secondary); font: 12px var(--font); }
+.simulation-playback { margin: 16px 0; }
+.simulation-event-log { max-height: 330px; overflow: auto; margin-top: 14px; }
+.simulation-event-log table { min-width: 500px; }
+.simulation-event-log thead { position: sticky; top: 0; background: var(--surface-1); }
+.simulation-manifest { margin-top: 16px; }
+.simulation summary { cursor: pointer; color: var(--text-primary); }
+.simulation details > p:first-of-type { margin-top: 12px; }
+@media (max-width: 900px) { .simulation-config { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .tabs { overflow-x: auto; justify-content: flex-start; } .tabs a { white-space: nowrap; } }
+
 .chart text { fill: var(--text-secondary); font-size: 11px; font-family: var(--font); }
 .chart .grid { stroke: var(--grid); }
 .chart .axis { stroke: var(--border); }

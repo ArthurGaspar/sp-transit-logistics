@@ -5,14 +5,16 @@ import { Overview } from "./views/Overview";
 const Insights = lazy(() => import("./views/Insights").then((m) => ({ default: m.Insights })));
 const Optimizer = lazy(() => import("./views/Optimizer").then((m) => ({ default: m.Optimizer })));
 const Model = lazy(() => import("./views/Model").then((m) => ({ default: m.Model })));
+const Simulation = lazy(() => import("./views/Simulation").then((m) => ({ default: m.Simulation })));
 
-type Tab = "overview" | "insights" | "optimizer" | "model";
+type Tab = "overview" | "insights" | "optimizer" | "model" | "simulation";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Operations" },
   { id: "optimizer", label: "Route optimizer" },
   { id: "insights", label: "Transit atlas" },
   { id: "model", label: "Data & methods" },
+  { id: "simulation", label: "Dispatch simulation" },
 ];
 
 function tabFromHash(): Tab {
@@ -63,6 +65,7 @@ export function App() {
           {tab === "insights" && <Insights dark={dark} />}
           {tab === "optimizer" && <Optimizer dark={dark} />}
           {tab === "model" && <Model />}
+          {tab === "simulation" && <Simulation />}
         </Suspense>
       </main>
     </div>

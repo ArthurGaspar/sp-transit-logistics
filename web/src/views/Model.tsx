@@ -105,6 +105,24 @@ export function Model() {
         </section>
 
         <section className="card">
+          <h3>Resident population{meta.population ? ` · Censo ${meta.population.year}` : ""}</h3>
+          {meta.population ? <>
+            <div className="tiles" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+              <Tile value={fmt.int(meta.population.totalResidents)} label="São Paulo + Grande ABC residents" delta={`Census reference year: ${meta.population.year}`} />
+              <Tile value={fmt.int(meta.population.abcResidents)} label="Grande ABC residents" delta="Seven municipalities" />
+            </div>
+            <table>
+              <thead><tr><th scope="col">Municipality</th><th scope="col" className="num">Residents</th></tr></thead>
+              <tbody>{meta.population.municipalities.map((municipality) => <tr key={municipality.code}>
+                <th scope="row">{municipality.name}</th><td className="num">{fmt.int(municipality.residents)}</td>
+              </tr>)}</tbody>
+            </table>
+            <p className="small">Source: <a href={meta.population.sourceUrl}>{meta.population.source}</a>. Snapshot retrieved {meta.population.retrievedAt}.</p>
+            <p className="small">These are municipal census totals, not current estimates or counts by hexagon. Access percentages remain area-based. Census-sector counts and boundaries are needed to estimate residents with low transit access; municipal totals are not spread uniformly across cells.</p>
+          </> : <p>Population data is unavailable in this dataset snapshot.</p>}
+        </section>
+
+        <section className="card">
           <h3>Method & assumptions</h3>
           <ul style={{ paddingLeft: 18, margin: 0, color: "var(--text-secondary)" }}>
             <li><b>Grid:</b> Uber H3 resolution 8 hexagons (~0.74 km², ~460 m edge) over São Paulo and the seven Grande ABC municipalities.</li>
